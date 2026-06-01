@@ -179,7 +179,7 @@ export default function Dashboard() {
         <div className="hd-r">
           {saving && <span style={{ fontSize: 10, color: 'var(--muted)' }}>保存中...</span>}
           {lastSaved && !saving && <span className="saved-msg">✓ {lastSaved} 保存済み</span>}
-          <span className="hd-kgi">KGI：案件相談数 1.5倍（2027年5月末）</span>
+          
         </div>
       </header>
 
