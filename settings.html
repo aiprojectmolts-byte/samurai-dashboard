@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SAMURAI × THE MOLTS — 連携設定</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+:root {
+  --bg: #f4f4f2;
+  --paper: #ffffff;
+  --b1: rgba(0,0,0,0.08);
+  --b2: rgba(0,0,0,0.05);
+  --ink: #0f0f0f;
+  --ink2: #3f3f3f;
+  --muted: #8c8c8c;
+  --green: #16a34a; --gbg: #f0fdf4;
+  --red: #dc2626; --rbg: #fef2f2;
+  --orange: #c2410c; --obg: #fff7ed;
+  --yellow: #b45309; --ybg: #fffbeb;
+  --r: 6px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--ink); font-size: 12px; line-height: 1.5; display: flex; flex-direction: column; height: 100vh; overflow: hidden; -webkit-font-smoothing: antialiased; }
+
+/* Header */
+.hd { height: 48px; background: var(--paper); border-bottom: 0.5px solid var(--b1); display: flex; align-items: center; justify-content: space-between; padding: 0 18px; flex-shrink: 0; }
+.hd-l { display: flex; align-items: center; gap: 10px; }
+.hd-logo { font-size: 12px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+.hd-div { width: 1px; height: 14px; background: var(--b1); }
+.hd-proj { font-size: 12px; color: var(--muted); }
+.hd-back { font-size: 11px; color: var(--muted); cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: var(--r); border: 0.5px solid var(--b1); background: var(--paper); transition: all 0.1s; }
+.hd-back:hover { background: var(--bg); color: var(--ink); }
+
+/* Layout */
+.body { display: flex; flex: 1; overflow: hidden; }
+
+/* Sidebar */
+.sb { width: 184px; background: var(--paper); border-right: 0.5px solid var(--b1); display: flex; flex-direction: column; flex-shrink: 0; }
+.sb-top { padding: 16px 14px 12px; border-bottom: 0.5px solid var(--b2); }
+.sb-name { font-size: 12px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+.sb-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.sb-grp { padding: 12px 10px 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.ni { display: flex; align-items: center; gap: 8px; padding: 7px 10px; margin: 1px 4px; border-radius: var(--r); cursor: pointer; font-size: 12px; color: var(--ink2); transition: background 0.1s; }
+.ni:hover { background: var(--bg); }
+.ni.on { background: #f0f0ef; color: var(--ink); font-weight: 500; }
+.ni-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.dot-g { background: var(--green); }
+.dot-y { background: var(--yellow); }
+.dot-n { background: #d1d5db; }
+
+/* Main */
+.main { flex: 1; overflow-y: auto; }
+.pg { padding: 24px 28px 48px; max-width: 720px; }
+.pg-title { font-size: 18px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; margin-bottom: 3px; }
+.pg-sub { font-size: 12px; color: var(--muted); margin-bottom: 24px; }
+
+/* Section */
+.sec { margin-bottom: 20px; }
+.sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1px; }
+.sec-title { font-size: 13px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+.status-badge { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 20px; }
+.sb-connected { background: var(--gbg); color: var(--green); }
+.sb-pending { background: var(--ybg); color: var(--yellow); }
+.sb-none { background: #f0f0ef; color: var(--muted); border: 0.5px solid var(--b1); }
+.sb-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.sbd-g { background: var(--green); }
+.sbd-y { background: var(--yellow); }
+.sbd-n { background: var(--muted); }
+
+/* Card */
+.card { background: var(--paper); border: 0.5px solid var(--b1); border-radius: var(--r); overflow: hidden; }
+.card-desc { padding: 12px 16px; border-bottom: 0.5px solid var(--b2); font-size: 11px; color: var(--muted); line-height: 1.6; background: #fafaf9; }
+.card-desc strong { color: var(--ink2); font-weight: 500; }
+.card-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+/* Field */
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field-label { font-size: 11px; font-weight: 500; color: var(--ink2); letter-spacing: 0.02em; }
+.field-sub { font-size: 10px; color: var(--muted); margin-top: -3px; }
+.field input[type="text"],
+.field input[type="password"] {
+  width: 100%;
+  border: 0.5px solid var(--b1);
+  border-radius: var(--r);
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: 'Inter', 'Noto Sans JP', sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  transition: all 0.1s;
+  outline: none;
+}
+.field input:focus { border-color: var(--ink); background: var(--paper); }
+.field input::placeholder { color: var(--muted); }
+.field input.connected { border-color: #86efac; background: var(--gbg); color: var(--green); }
+
+/* Upload zone */
+.upload-zone { border: 0.5px dashed var(--b1); border-radius: var(--r); padding: 20px; text-align: center; cursor: pointer; transition: all 0.15s; background: var(--bg); }
+.upload-zone:hover { border-color: var(--ink); background: #f0f0ef; }
+.upload-zone.has-file { border-style: solid; border-color: #86efac; background: var(--gbg); }
+.uz-icon { font-size: 20px; margin-bottom: 6px; }
+.uz-title { font-size: 12px; font-weight: 500; color: var(--ink2); margin-bottom: 2px; }
+.uz-sub { font-size: 10px; color: var(--muted); }
+.uz-file { font-size: 11px; font-weight: 500; color: var(--green); margin-top: 4px; }
+
+/* Card footer */
+.card-footer { padding: 12px 16px; border-top: 0.5px solid var(--b2); display: flex; align-items: center; justify-content: space-between; background: #fafaf9; }
+.last-saved { font-size: 10px; color: var(--muted); }
+.save-btn { padding: 6px 16px; background: var(--ink); color: #fff; border: none; border-radius: var(--r); font-size: 12px; font-weight: 500; cursor: pointer; font-family: 'Inter', 'Noto Sans JP', sans-serif; transition: opacity 0.1s; }
+.save-btn:hover { opacity: 0.8; }
+.save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Divider */
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Manual note */
+.manual-note { background: #fafaf9; border: 0.5px solid var(--b1); border-radius: var(--r); padding: 14px 16px; display: flex; align-items: flex-start; gap: 10px; }
+.mn-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.mn-body { flex: 1; }
+.mn-title { font-size: 12px; font-weight: 500; color: var(--ink2); margin-bottom: 2px; }
+.mn-desc { font-size: 11px; color: var(--muted); line-height: 1.6; }
+
+/* Toast */
+.toast { position: fixed; bottom: 24px; right: 24px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 500; padding: 10px 16px; border-radius: var(--r); opacity: 0; transform: translateY(8px); transition: all 0.2s; pointer-events: none; z-index: 100; }
+.toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<header class="hd">
+  <div class="hd-l">
+    <span class="hd-logo">SAMURAI × THE MOLTS</span>
+    <span class="hd-div"></span>
+    <span class="hd-proj">マーケティングプロジェクト</span>
+  </div>
+  <button class="hd-back" onclick="history.back()">← ダッシュボードに戻る</button>
+</header>
+
+<div class="body">
+  <aside class="sb">
+    <div class="sb-top">
+      <div class="sb-name">連携設定</div>
+      <div class="sb-sub">データ取得の設定を管理する</div>
+    </div>
+    <div class="sb-grp">設定項目</div>
+    <div class="ni on" onclick="scrollTo('ga4')"><div class="ni-dot dot-y"></div>GA4</div>
+    <div class="ni" onclick="scrollTo('x')"><div class="ni-dot dot-n"></div>X（CSV）</div>
+    <div class="ni" onclick="scrollTo('slack')"><div class="ni-dot dot-g"></div>Slack</div>
+    <div class="ni" onclick="scrollTo('manual')"><div class="ni-dot dot-n"></div>手動入力</div>
+  </aside>
+
+  <main class="main">
+    <div class="pg">
+      <div class="pg-title">連携設定</div>
+      <div class="pg-sub">各KPIのデータ取得方法を設定する。設定完了後はダッシュボードに自動反映される。</div>
+
+      <!-- GA4 -->
+      <div class="sec" id="sec-ga4">
+        <div class="sec-head">
+          <span class="sec-title">GA4 — Google Analytics 4</span>
+          <span class="status-badge sb-pending"><span class="sb-dot sbd-y"></span>設定待ち</span>
+        </div>
+        <div class="card">
+          <div class="card-desc">
+            <strong>取得できるKPI：</strong>LP CVR（訪問→問い合わせ転換率）・流入元内訳（検索/X/note/ダイレクト）・プロダクト別問い合わせ数<br>
+            SAMURAIのGA4プロパティIDと、Google Cloud上で作成したサービスアカウントのJSONキーが必要です。
+          </div>
+          <div class="card-body">
+            <div class="field-row">
+              <div class="field">
+                <div class="field-label">測定ID</div>
+                <div class="field-sub">例：G-XXXXXXXXXX</div>
+                <input type="text" id="ga4-mid" placeholder="G-XXXXXXXXXX"/>
+              </div>
+              <div class="field">
+                <div class="field-label">プロパティID</div>
+                <div class="field-sub">例：123456789</div>
+                <input type="text" id="ga4-pid" placeholder="123456789"/>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-label">サービスアカウント JSONキー</div>
+              <div class="field-sub">Google Cloud Consoleからダウンロードした .json ファイル</div>
+              <div class="upload-zone" id="ga4-upload" onclick="document.getElementById('ga4-file').click()">
+                <div class="uz-icon">↑</div>
+                <div class="uz-title">JSONファイルをアップロード</div>
+                <div class="uz-sub">クリックしてファイルを選択</div>
+                <div class="uz-file" id="ga4-filename"></div>
+              </div>
+              <input type="file" id="ga4-file" accept=".json" style="display:none" onchange="handleFile('ga4', this)"/>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span class="last-saved" id="ga4-saved">未保存</span>
+            <button class="save-btn" onclick="save('ga4')">保存する</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- X CSV -->
+      <div class="sec" id="sec-x">
+        <div class="sec-head">
+          <span class="sec-title">X — インプレッション（CSVアップロード）</span>
+          <span class="status-badge sb-none"><span class="sb-dot sbd-n"></span>手動運用</span>
+        </div>
+        <div class="card">
+          <div class="card-desc">
+            <strong>取得できるKPI：</strong>週次インプレッション数・プロフィールクリック数<br>
+            XのAnalytics（analytics.twitter.com）からCSVをエクスポートして、こちらにアップロードする。週次での更新を推奨。
+          </div>
+          <div class="card-body">
+            <div class="field">
+              <div class="field-label">CSVファイル（週次アップロード）</div>
+              <div class="field-sub">Xアナリティクス → エクスポート → 「ツイートアクティビティ」のCSV</div>
+              <div class="upload-zone" id="x-upload" onclick="document.getElementById('x-file').click()">
+                <div class="uz-icon">↑</div>
+                <div class="uz-title">CSVファイルをアップロード</div>
+                <div class="uz-sub">クリックしてファイルを選択 / 毎週更新</div>
+                <div class="uz-file" id="x-filename"></div>
+              </div>
+              <input type="file" id="x-file" accept=".csv" style="display:none" onchange="handleFile('x', this)"/>
+            </div>
+            <div class="field">
+              <div class="field-label">Xアカウント名</div>
+              <div class="field-sub">CSVと照合するアカウントの確認用</div>
+              <input type="text" id="x-account" placeholder="@SAMURAI_ARCHI"/>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span class="last-saved" id="x-saved">未アップロード</span>
+            <button class="save-btn" onclick="save('x')">保存する</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Slack -->
+      <div class="sec" id="sec-slack">
+        <div class="sec-head">
+          <span class="sec-title">Slack — 問い合わせ数カウント</span>
+          <span class="status-badge sb-connected"><span class="sb-dot sbd-g"></span>接続済み</span>
+        </div>
+        <div class="card">
+          <div class="card-desc">
+            <strong>取得できるKPI：</strong>問い合わせ数（月次・週次）<br>
+            問い合わせが届くSlackチャンネルのメッセージ数を自動カウントする。Slack Connectは接続済みのため、チャンネル名の設定のみ必要。
+          </div>
+          <div class="card-body">
+            <div class="field">
+              <div class="field-label">問い合わせ通知チャンネル</div>
+              <div class="field-sub">問い合わせが転送されるチャンネル名（#を含む）</div>
+              <input type="text" id="slack-ch" placeholder="#samurai-inquiry" class="connected" value="#samurai-inquiry"/>
+            </div>
+            <div class="field">
+              <div class="field-label">カウント対象の識別キーワード（任意）</div>
+              <div class="field-sub">特定のキーワードを含むメッセージのみカウントする場合に設定</div>
+              <input type="text" id="slack-kw" placeholder="例：新規問い合わせ、お問い合わせ"/>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span class="last-saved" id="slack-saved">最終同期：2026/06/01 09:00</span>
+            <button class="save-btn" onclick="save('slack')">保存する</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 手動入力 -->
+      <div class="sec" id="sec-manual">
+        <div class="sec-head">
+          <span class="sec-title">手動入力 — note・リファラル</span>
+          <span class="status-badge sb-none"><span class="sb-dot sbd-n"></span>手動運用</span>
+        </div>
+        <div class="manual-note">
+          <div class="mn-icon">i</div>
+          <div class="mn-body">
+            <div class="mn-title">以下のKPIは手動入力で運用する</div>
+            <div class="mn-desc">
+              <strong>note 閲覧数</strong>：公式APIが非公開のため自動取得不可。週次でnoteのダッシュボードから数値をコピペしてダッシュボードに入力する。<br><br>
+              <strong>VISIOALリファラル</strong>：声がけ数・紹介経由の問い合わせ数・商談転換数はSAMURAIが週次で入力する。
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function scrollTo(id) {
+  document.getElementById('sec-' + id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelectorAll('.ni').forEach(n => n.classList.remove('on'));
+  event.currentTarget.classList.add('on');
+}
+
+function handleFile(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const zone = document.getElementById(type + '-upload');
+  const name = document.getElementById(type + '-filename');
+  zone.classList.add('has-file');
+  name.textContent = file.name;
+}
+
+function save(type) {
+  const savedEl = document.getElementById(type + '-saved');
+  const now = new Date();
+  const ts = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  // status badge update
+  const sec = document.getElementById('sec-' + type);
+  const badge = sec.querySelector('.status-badge');
+  const dot = sec.querySelector('.sb-dot');
+  badge.className = 'status-badge sb-connected';
+  badge.innerHTML = `<span class="sb-dot sbd-g"></span>${badge.innerHTML.split('</span>')[1] || '設定済み'}`;
+  dot.className = 'sb-dot sbd-g';
+
+  // sidebar dot update
+  const niMap = { ga4: 0, x: 1, slack: 2, manual: 3 };
+  const nis = document.querySelectorAll('.ni .ni-dot');
+  if (nis[niMap[type]]) nis[niMap[type]].className = 'ni-dot dot-g';
+
+  savedEl.textContent = `最終保存：${ts}`;
+  showToast('設定を保存しました');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+</script>
+</body>
+</html>
