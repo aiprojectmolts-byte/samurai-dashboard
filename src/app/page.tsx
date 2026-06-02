@@ -404,6 +404,37 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+            {view === 'members' && (
+              <div>
+                <div className="pg-title">メンバー管理</div>
+                <div className="pg-sub">SAMURAI・THE MOLTSの担当者を管理する</div>
+                {(['samurai', 'molts'] as const).map(team => (
+                  <div key={team} className="cw" style={{marginBottom:12}}>
+                    <div className="ih">{team === 'samurai' ? 'SAMURAI' : 'THE MOLTS'}</div>
+                    <div style={{padding:16}}>
+                      {members[team].map((name, i) => (
+                        <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                          <span style={{flex:1,fontSize:12,color:'var(--ink)'}}>{name}</span>
+                          <button onClick={() => {
+                            const updated = {...members, [team]: members[team].filter((_,j) => j !== i)}
+                            setMembers(updated)
+                            fetch('/api/members', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)})
+                          }} style={{fontSize:11,color:'var(--muted)',background:'none',border:'0.5px solid var(--b1)',borderRadius:4,padding:'2px 8px',cursor:'pointer',fontFamily:'inherit'}}>削除</button>
+                        </div>
+                      ))}
+                      <button onClick={() => {
+                        const val = window.prompt('担当者名を入力')
+                        if (val && val.trim()) {
+                          const updated = {...members, [team]: [...members[team], val.trim()]}
+                          setMembers(updated)
+                          fetch('/api/members', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)})
+                        }
+                      }} style={{fontSize:11,background:'none',border:'0.5px solid var(--b1)',borderRadius:'var(--r)',padding:'4px 12px',cursor:'pointer',fontFamily:'inherit'}}>+ 追加</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {view === 'schedule' && <div><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}><div className="pg-title">スケジュール</div><button onClick={()=>setModalTask(null)} style={{padding:"5px 14px",background:"var(--ink)",color:"#fff",border:"none",borderRadius:"var(--r)",fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>+ タスク追加</button></div><GanttView tasks={tasks} onTasksChange={async (updated) => { setTasks(updated); await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }) }} onEditTask={(task) => setModalTask(task)} /></div>}
 
           </div>
