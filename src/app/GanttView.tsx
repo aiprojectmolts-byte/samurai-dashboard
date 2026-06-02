@@ -104,6 +104,31 @@ const CW = 48
 
 export default function GanttView({ tasks: propTasks, members, onTasksChange, onEditTask }: Props) {
   const [tasks, setTasks] = useState<Task[]>(propTasks || defaultTasks)
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterAssignee, setFilterAssignee] = useState('all')
+  const [sortBy, setSortBy] = useState('registered')
+
+  const allMembers = members ? [...members.samurai, ...members.molts] : []
+
+  const filteredTasks = [...tasks]
+    .filter(t => filterStatus === 'all' || t.st === filterStatus)
+    .filter(t => filterAssignee === 'all' || t.assignee === filterAssignee)
+    .sort((a, b) => {
+      if (sortBy === 'blocker' && (a.blocker ?? false) !== (b.blocker ?? false)) return a.blocker ? -1 : 1
+      if (sortBy === 'deadline') {
+        const ae = a.e || '9999-99-99', be = b.e || '9999-99-99'
+        return ae < be ? -1 : ae > be ? 1 : 0
+      }
+      return 0
+    })
+
+  const fbtn = (active: boolean) => ({
+    padding: '3px 10px',
+    border: '0.5px solid ' + (active ? 'var(--ink)' : 'var(--b1)'),
+    borderRadius: 20, fontSize: 11, cursor: 'pointer' as const,
+    fontFamily: 'inherit', background: active ? 'var(--ink)' : 'none',
+    color: active ? '#fff' : 'var(--ink2)',
+  })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -196,7 +221,30 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
       `}</style>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <div className="pg-sub" style={{ margin: 0 }}>遅れありはオレンジ、期日変更は●マークで識別</div>
+        <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>ステータス</span>
+            {['all', 'doing', 'waiting', 'delayed', 'todo', 'done'].map(s => (
+              <button key={s} onClick={() => setFilterStatus(s)} style={fbtn(filterStatus === s)}>
+                {s === 'all' ? 'すべて' : s === 'doing' ? '進行中' : s === 'waiting' ? '対応待ち' : s === 'delayed' ? '遅れあり' : s === 'todo' ? '未着手' : '完了'}
+              </button>
+            ))}
+          </div>
+          {allMembers.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>担当者</span>
+              {['all', ...allMembers].map(m => (
+                <button key={m} onClick={() => setFilterAssignee(m)} style={fbtn(filterAssignee === m)}>{m === 'all' ? '全員' : m}</button>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>並び順</span>
+            {[['registered', '登録順'], ['deadline', '期日順'], ['blocker', 'ブロッカー優先']].map(([val, label]) => (
+              <button key={val} onClick={() => setSortBy(val)} style={fbtn(sortBy === val)}>{label}</button>
+            ))}
+          </div>
+        </div>
         {saving && <span style={{ fontSize: 10, color: 'var(--muted)' }}>保存中...</span>}
       </div>
 
