@@ -239,6 +239,8 @@ export default function Dashboard() {
           </div>
                   <div className="sb-div" />
           <div className={`ni${view === 'questions' ? ' on' : ''}`} onClick={() => setView('questions')}>質問シート</div>
+          
+          <div className={`ni${view === 'members' ? ' on' : ''}`} onClick={() => setView('members')}>メンバー管理</div>
           <div className="sb-grp">設定</div>
           <div className={`ni${view === 'settings' ? ' on' : ''}`} onClick={() => setView('settings')}>データ連携</div>
         </aside>
