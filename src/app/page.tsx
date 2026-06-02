@@ -2,6 +2,7 @@
 import KpiView from './KpiView'
 import GanttView from './GanttView'
 import TaskTracker from './TaskTracker'
+import QuestionsView from './QuestionsView'
 import TaskModal from './TaskModal'
 
 import { useState, useEffect } from 'react'
@@ -237,6 +238,7 @@ export default function Dashboard() {
             タスクトラッカー <span className="nb nb-r">{waiting.length}件</span>
           </div>
                   <div className="sb-div" />
+          <div className={`ni${view === 'questions' ? ' on' : ''}`} onClick={() => setView('questions')}>質問シート</div>
           <div className="sb-grp">設定</div>
           <div className={`ni${view === 'settings' ? ' on' : ''}`} onClick={() => setView('settings')}>データ連携</div>
         </aside>
@@ -404,6 +406,7 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+            {view === 'questions' && <QuestionsView members={members} />}
             {view === 'members' && (
               <div>
                 <div className="pg-title">メンバー管理</div>
