@@ -435,7 +435,7 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
-            {view === 'schedule' && <div><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}><div className="pg-title">スケジュール</div><button onClick={()=>setModalTask(null)} style={{padding:"5px 14px",background:"var(--ink)",color:"#fff",border:"none",borderRadius:"var(--r)",fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>+ タスク追加</button></div><GanttView tasks={tasks} onTasksChange={async (updated) => { setTasks(updated); await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }) }} onEditTask={(task) => setModalTask(task)} /></div>}
+            {view === 'schedule' && <div><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}><div className="pg-title">スケジュール</div><button onClick={()=>setModalTask(null)} style={{padding:"5px 14px",background:"var(--ink)",color:"#fff",border:"none",borderRadius:"var(--r)",fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>+ タスク追加</button></div><GanttView tasks={tasks} members={members} onTasksChange={async (updated) => { setTasks(updated); await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }) }} onEditTask={(task) => setModalTask(task)} /></div>}
 
           </div>
         </main>

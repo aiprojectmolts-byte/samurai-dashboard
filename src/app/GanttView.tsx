@@ -91,15 +91,18 @@ const buildGroups = (tasks: Task[]) => {
   return groups
 }
 
+interface Members { samurai: string[]; molts: string[] }
+
 interface Props {
   tasks?: Task[]
+  members?: Members
   onTasksChange?: (tasks: Task[]) => void
   onEditTask?: (task: Task) => void
 }
 
 const CW = 48
 
-export default function GanttView({ tasks: propTasks, onTasksChange, onEditTask }: Props) {
+export default function GanttView({ tasks: propTasks, members, onTasksChange, onEditTask }: Props) {
   const [tasks, setTasks] = useState<Task[]>(propTasks || defaultTasks)
   const [saving, setSaving] = useState(false)
 
