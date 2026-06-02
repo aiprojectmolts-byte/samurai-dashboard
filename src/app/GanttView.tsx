@@ -243,13 +243,13 @@ export default function GanttView({ tasks: propTasks, onTasksChange, onEditTask 
 
                     {/* 子タスク行 */}
                     {groupTasks.map(t => (
-                      <tr key=<span onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span> className={`g-row${t.st === 'done' ? ' done-row' : ''}`}>
+                      <tr key={t.name} className={`g-row${t.st === 'done' ? ' done-row' : ''}`}>
                         <td className="t-label">
                           <div className="row-inner">
                             <div className={`t-check${t.st === 'done' ? ' done' : ''}`} onClick={() => toggleDone(t.name)}>
                               {t.st === 'done' ? '✓' : ''}
                             </div>
-                            <span className="t-name" title=<span onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span>><span onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span></span>
+                            <span className="t-name" onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span>
                             {t.st === 'delayed' && <span className="delay-tag">遅れあり</span>}
                             {t.chg && <span className="delay-tag">変更</span>}
                           </div>
