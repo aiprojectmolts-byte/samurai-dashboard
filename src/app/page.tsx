@@ -41,13 +41,22 @@ const ownerLabel = { molts: 'THE MOLTS', samurai: 'SAMURAI', both: '共同' }
 const ownerClass = { molts: 'ob-m', samurai: 'ob-s', both: 'ob-b' }
 
 export default function Dashboard() {
-  const [view, setView] = useState('home')
+  const [view, setViewRaw] = useState('home')
+  const setView = (v: string) => { setViewRaw(v); if (v === 'home') fetch('/api/kpi').then(r => r.json()).then(data => { if (data && Object.keys(data).length > 0) setKpi((k: typeof kpi) => ({...k, ...data})) }).catch(() => {}) }
   const [tasks, setTasks] = useState<Task[]>(defaultTasks)
   const [saving, setSaving] = useState(false)
+  const [kpi, setKpi] = useState({
+    visioalCvr: 3.2, xImpression: 18.4, noteViews: 4820,
+    referralCount: 3, referralInquiry: 1
+  })
   const [modalTask, setModalTask] = useState<Task | null | undefined>(undefined)
   const [lastSaved, setLastSaved] = useState<string | null>(null)
 
   useEffect(() => {
+    fetch('/api/kpi')
+      .then(r => r.json())
+      .then(data => { if (data && Object.keys(data).length > 0) setKpi(k => ({...k, ...data})) })
+      .catch(() => {})
     fetch('/api/tasks')
       .then(r => r.json())
       .then(data => { if (Array.isArray(data) && data.length > 0) setTasks(data) })
@@ -219,6 +228,9 @@ export default function Dashboard() {
           <div className={`ni${view === 'tasks' ? ' on' : ''}`} onClick={() => setView('tasks')}>
             タスクトラッカー <span className="nb nb-r">{waiting.length}件</span>
           </div>
+                  <div className="sb-div" />
+          <div className="sb-grp">設定</div>
+          <div className={`ni${view === 'settings' ? ' on' : ''}`} onClick={() => setView('settings')}>データ連携</div>
         </aside>
 
         <main className="main">
@@ -248,10 +260,10 @@ export default function Dashboard() {
                 </div>
 
                 <div className="stat-grid">
-                  <div className="sc"><div className="sc-ey">VISIOAL LP CVR</div><div className="sc-v">3.2<span style={{ fontSize: 13, fontWeight: 400 }}>%</span></div><div className="sc-sub">GA4 <span className="chip cg">+0.8%</span></div></div>
-                  <div className="sc"><div className="sc-ey">X インプレッション</div><div className="sc-v" style={{ fontSize: 22 }}>18.4K</div><div className="sc-sub"><span className="chip cg">+2.1K 先週比</span></div></div>
-                  <div className="sc"><div className="sc-ey">note 閲覧数</div><div className="sc-v" style={{ fontSize: 22 }}>4,820</div><div className="sc-sub"><span className="chip cr">−180 先週比</span></div></div>
-                  <div className="sc"><div className="sc-ey">リファラル声がけ</div><div className="sc-v">3<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)' }}>/3</span></div><div className="sc-sub" style={{ color: 'var(--green)' }}>フェーズ1目標達成</div></div>
+                  <div className="sc"><div className="sc-ey">VISIOAL LP CVR</div><div className="sc-v">{kpi.visioalCvr}<span style={{ fontSize: 13, fontWeight: 400 }}>%</span></div><div className="sc-sub">GA4</div></div>
+                  <div className="sc"><div className="sc-ey">X インプレッション</div><div className="sc-v" style={{ fontSize: 22 }}>{kpi.xImpression}K</div><div className="sc-sub">週次</div></div>
+                  <div className="sc"><div className="sc-ey">note 閲覧数</div><div className="sc-v" style={{ fontSize: 22 }}>{kpi.noteViews.toLocaleString()}</div><div className="sc-sub">累計</div></div>
+                  <div className="sc"><div className="sc-ey">リファラル声がけ</div><div className="sc-v">{kpi.referralCount}<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)' }}>件</span></div><div className="sc-sub">紹介経由 {kpi.referralInquiry}件</div></div>
                   <div className="sc"><div className="sc-ey">対応待ち / 遅れあり</div><div className="sc-v" style={{ color: 'var(--red)' }}>{waiting.length}<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)' }}> · </span><span style={{ color: 'var(--orange)' }}>{delayed.length}</span></div><div className="sc-sub" style={{ color: 'var(--red)' }}>要対応</div></div>
                 </div>
 
@@ -359,6 +371,51 @@ export default function Dashboard() {
 
             {/* KPI・スケジュールは今後実装 */}
             {view === 'kpi' && <KpiView />}
+            {view === 'settings' && (
+              <div>
+                <div className="pg-title">データ連携</div>
+                <div className="pg-sub">各KPIのデータ取得方法を設定する</div>
+                <div className="cw" style={{marginBottom:10}}>
+                  <div className="ih">GA4 — Google Analytics 4 <span style={{marginLeft:'auto',fontSize:10,color:'var(--yellow)',background:'var(--ybg)',padding:'2px 8px',borderRadius:20}}>設定待ち</span></div>
+                  <div style={{padding:'16px'}}>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
+                      <div><div style={{fontSize:11,fontWeight:500,color:'var(--ink2)',marginBottom:5}}>測定ID</div><input type="text" placeholder="G-XXXXXXXXXX" style={{width:'100%',border:'0.5px solid var(--b1)',borderRadius:'var(--r)',padding:'8px 10px',fontSize:12,fontFamily:'inherit',background:'var(--bg)',outline:'none'}}/></div>
+                      <div><div style={{fontSize:11,fontWeight:500,color:'var(--ink2)',marginBottom:5}}>プロパティID</div><input type="text" placeholder="123456789" style={{width:'100%',border:'0.5px solid var(--b1)',borderRadius:'var(--r)',padding:'8px 10px',fontSize:12,fontFamily:'inherit',background:'var(--bg)',outline:'none'}}/></div>
+                    </div>
+                    <div style={{fontSize:11,fontWeight:500,color:'var(--ink2)',marginBottom:5}}>サービスアカウント JSONキー</div>
+                    <div style={{border:'0.5px dashed var(--b1)',borderRadius:'var(--r)',padding:'20px',textAlign:'center',background:'var(--bg)',cursor:'pointer'}}>
+                      <div style={{fontSize:12,fontWeight:500,color:'var(--ink2)',marginBottom:4}}>JSONファイルをアップロード</div>
+                      <div style={{fontSize:10,color:'var(--muted)'}}>クリックしてファイルを選択</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="cw" style={{marginBottom:10}}>
+                  <div className="ih">X — インプレッション（CSVアップロード）<span style={{marginLeft:'auto',fontSize:10,color:'var(--muted)',background:'#f0f0ef',padding:'2px 8px',borderRadius:20}}>手動運用</span></div>
+                  <div style={{padding:'16px'}}>
+                    <div style={{fontSize:11,fontWeight:500,color:'var(--ink2)',marginBottom:5}}>CSVファイル（週次アップロード）</div>
+                    <div style={{border:'0.5px dashed var(--b1)',borderRadius:'var(--r)',padding:'20px',textAlign:'center',background:'var(--bg)',cursor:'pointer',marginBottom:12}}>
+                      <div style={{fontSize:12,fontWeight:500,color:'var(--ink2)',marginBottom:4}}>CSVファイルをアップロード</div>
+                      <div style={{fontSize:10,color:'var(--muted)'}}>Xアナリティクス → エクスポート → ツイートアクティビティのCSV</div>
+                    </div>
+                    <div><div style={{fontSize:11,fontWeight:500,color:'var(--ink2)',marginBottom:5}}>Xアカウント名</div><input type="text" placeholder="@SAMURAI_ARCHI" style={{width:'100%',border:'0.5px solid var(--b1)',borderRadius:'var(--r)',padding:'8px 10px',fontSize:12,fontFamily:'inherit',background:'var(--bg)',outline:'none'}}/></div>
+                  </div>
+                </div>
+                <div className="cw" style={{marginBottom:10}}>
+                  <div className="ih">Slack — 問い合わせ数カウント <span style={{marginLeft:'auto',fontSize:10,color:'var(--green)',background:'var(--gbg)',padding:'2px 8px',borderRadius:20}}>接続済み</span></div>
+                  <div style={{padding:'16px'}}>
+                    <div style={{marginBottom:12}}><div style={{fontSize:11,fontWeight:500,color:'var(--ink2)',marginBottom:5}}>問い合わせ通知チャンネル</div><input type="text" placeholder="#samurai-inquiry" defaultValue="#samurai-inquiry" style={{width:'100%',border:'0.5px solid #86efac',borderRadius:'var(--r)',padding:'8px 10px',fontSize:12,fontFamily:'inherit',background:'var(--gbg)',outline:'none',color:'var(--green)'}}/></div>
+                    <div><div style={{fontSize:11,fontWeight:500,color:'var(--ink2)',marginBottom:5}}>識別キーワード（任意）</div><input type="text" placeholder="例：新規問い合わせ、お問い合わせ" style={{width:'100%',border:'0.5px solid var(--b1)',borderRadius:'var(--r)',padding:'8px 10px',fontSize:12,fontFamily:'inherit',background:'var(--bg)',outline:'none'}}/></div>
+                  </div>
+                </div>
+                <div className="cw">
+                  <div className="ih">手動入力 — note・リファラル</div>
+                  <div style={{padding:'16px',fontSize:12,color:'var(--muted)',lineHeight:1.7}}>
+                    <strong style={{color:'var(--ink2)'}}>note 閲覧数</strong>：公式APIが非公開のため自動取得不可。KPIページから週次で手動入力する。<br/>
+                    <strong style={{color:'var(--ink2)'}}>VISIOALリファラル</strong>：声がけ数・紹介経由の問い合わせ数はSAMURAIが週次でKPIページから入力する。
+                  </div>
+                </div>
+              </div>
+            )}
             {view === 'schedule' && <div><div className="pg-title">スケジュール</div><GanttView tasks={tasks} onTasksChange={async (updated) => { setTasks(updated); await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }) }} /></div>}
 
           </div>
