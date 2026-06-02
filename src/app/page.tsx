@@ -1,6 +1,7 @@
 'use client'
 import KpiView from './KpiView'
 import GanttView from './GanttView'
+import TaskTracker from './TaskTracker'
 import TaskModal from './TaskModal'
 
 import { useState, useEffect } from 'react'
@@ -15,6 +16,10 @@ interface Task {
   own: 'molts' | 'samurai' | 'both'
   st: TaskStatus
   chg: boolean
+  assignee?: string
+  blocker?: boolean
+  impact?: string
+  src?: string
 }
 
 const defaultTasks: Task[] = [
@@ -50,6 +55,7 @@ export default function Dashboard() {
     referralCount: 3, referralInquiry: 1, kgiTotal: 12, kgiPrev: 9, kgiRendery: 4, kgiRenderyPrev: 3, kgiKnock: 5, kgiKnockPrev: 3, kgiVisioal: 2, kgiVisioalPrev: 2, kgiCustom: 1, kgiCustomPrev: 2
   })
   const [modalTask, setModalTask] = useState<Task | null | undefined>(undefined)
+  const [members, setMembers] = useState<{ samurai: string[], molts: string[] }>({ samurai: ['加藤', '髙山', '川島', '横溝', 'その他'], molts: ['海老澤', '本村', 'その他'] })
   const [lastSaved, setLastSaved] = useState<string | null>(null)
 
   useEffect(() => {
@@ -91,6 +97,8 @@ export default function Dashboard() {
     setTasks(updated)
     await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
   }
+
+  useEffect(() => { fetch('/api/members').then(r => r.json()).then(data => setMembers(data)).catch(() => {}) }, [])
 
   const waiting = tasks.filter(t => t.st === 'waiting')
   const delayed = tasks.filter(t => t.st === 'delayed')
@@ -323,58 +331,38 @@ export default function Dashboard() {
             )}
 
             {/* タスクトラッカー */}
-            {view === 'tasks' && (
-              <div>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}><div className="pg-title">タスクトラッカー</div><button onClick={()=>setModalTask(null)} style={{padding:"5px 14px",background:"var(--ink)",color:"#fff",border:"none",borderRadius:"var(--r)",fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>+ タスク追加</button></div>
-                <div className="pg-sub">対応待ち・遅れあり・進行中タスクを優先度別に管理する</div>
-                <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-                  <div className="sc"><div className="sc-ey">対応待ち</div><div className="sc-v" style={{ color: 'var(--red)' }}>{waiting.length}</div><div className="sc-sub" style={{ color: 'var(--red)' }}>即対応</div></div>
-                  <div className="sc"><div className="sc-ey">遅れあり</div><div className="sc-v" style={{ color: 'var(--orange)' }}>{delayed.length}</div><div className="sc-sub" style={{ color: 'var(--orange)' }}>期日超過</div></div>
-                  <div className="sc"><div className="sc-ey">進行中</div><div className="sc-v" style={{ color: 'var(--yellow)' }}>{doing.length}</div><div className="sc-sub">タスク</div></div>
-                  <div className="sc"><div className="sc-ey">完了</div><div className="sc-v" style={{ color: 'var(--green)' }}>{done.length}</div><div className="sc-sub">タスク</div></div>
-                </div>
-
-                {[
-                  { label: '対応待ち', color: 'var(--red)', items: waiting, cls: 'il-w', nbcls: 'nb-r' },
-                  { label: '遅れあり', color: 'var(--orange)', items: delayed, cls: 'il-d', nbcls: 'nb-o' },
-                  { label: '進行中', color: 'var(--ink)', items: doing, cls: 'il-y', nbcls: 'nb-o' },
-                  { label: '完了', color: 'var(--green)', items: done, cls: 'il-g', nbcls: '' },
-                ].map(({ label, color, items, cls, nbcls }) => (
-                  <div className="cw" key={label} style={{ marginBottom: 8 }}>
-                    <div className="ih" style={{ color }}>{label} <span className={`nb ${nbcls}`}>{items.length}</span></div>
-                    {items.map((t) => {
-                      const idx = tasks.indexOf(t)
-                      return (
-                        <div className="ir" key={t.name} style={{ opacity: t.st === 'done' ? 0.4 : 1 }}>
-                          <span className={`il ${cls}`}>{t.施策}</span>
-                          <div className="ib">
-                            <div className="it" style={{cursor:"pointer"}} onClick={()=>setModalTask(t)}>{t.name}</div>
-                            {t.chg && <div className="im"><span className="ctag">期日変更あり</span></div>}
-                          </div>
-                          <select
-                            className="st-sel"
-                            value={t.st}
-                            onChange={(e) => updateTaskStatus(idx, e.target.value as TaskStatus)}
-                          >
-                            {Object.entries(statusLabel).map(([val, lbl]) => (
-                              <option key={val} value={val}>{lbl}</option>
-                            ))}
-                          </select>
-                          <span className={`ob ${ownerClass[t.own]}`}>{ownerLabel[t.own]}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* KPI・スケジュールは今後実装 */}
+            {view === 'tasks' && <TaskTracker tasks={tasks} members={members} onStatusChange={(idx, st) => updateTaskStatus(idx, st as any)} onOpenModal={(t) => setModalTask(t)} />}
             {view === 'kpi' && <KpiView />}
             {view === 'settings' && (
               <div>
                 <div className="pg-title">データ連携</div>
                 <div className="pg-sub">各KPIのデータ取得方法を設定する</div>
+              <div className="sh" style={{marginTop:0}}>担当者管理</div>
+              {(['samurai', 'molts'] as const).map(team => (
+                <div key={team} className="cw" style={{marginBottom:10}}>
+                  <div className="ih">{team === 'samurai' ? 'SAMURAI' : 'THE MOLTS'}</div>
+                  <div style={{padding:16}}>
+                    {members[team].map((name, i) => (
+                      <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                        <span style={{flex:1,fontSize:12,color:'var(--ink)'}}>{name}</span>
+                        <button onClick={() => {
+                          const updated = {...members, [team]: members[team].filter((_,j) => j !== i)}
+                          setMembers(updated)
+                          fetch('/api/members', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)})
+                        }} style={{fontSize:11,color:'var(--muted)',background:'none',border:'0.5px solid var(--b1)',borderRadius:4,padding:'2px 8px',cursor:'pointer',fontFamily:'inherit'}}>削除</button>
+                      </div>
+                    ))}
+                    <button onClick={() => {
+                      const val = window.prompt('担当者名を入力')
+                      if (val && val.trim()) {
+                        const updated = {...members, [team]: [...members[team], val.trim()]}
+                        setMembers(updated)
+                        fetch('/api/members', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)})
+                      }
+                    }} style={{fontSize:11,background:'none',border:'0.5px solid var(--b1)',borderRadius:'var(--r)',padding:'4px 12px',cursor:'pointer',fontFamily:'inherit'}}>+ 追加</button>
+                  </div>
+                </div>
+              ))}
                 <div className="cw" style={{marginBottom:10}}>
                   <div className="ih">GA4 — Google Analytics 4 <span style={{marginLeft:'auto',fontSize:10,color:'var(--yellow)',background:'var(--ybg)',padding:'2px 8px',borderRadius:20}}>設定待ち</span></div>
                   <div style={{padding:'16px'}}>
@@ -424,7 +412,7 @@ export default function Dashboard() {
     <>
       {modalTask !== undefined && (
         <TaskModal
-          task={modalTask}
+          task={modalTask} members={members}
           onSave={saveTask}
           onDelete={deleteTask}
           onClose={() => setModalTask(undefined)}

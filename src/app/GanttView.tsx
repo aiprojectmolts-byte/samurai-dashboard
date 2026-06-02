@@ -12,6 +12,10 @@ interface Task {
   own: 'molts' | 'samurai' | 'both'
   st: TaskStatus
   chg: boolean
+  assignee?: string
+  blocker?: boolean
+  impact?: string
+  src?: string
 }
 
 const defaultTasks: Task[] = [
