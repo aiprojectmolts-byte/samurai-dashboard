@@ -28,7 +28,7 @@ export default function TrendChart({ compact = false }: Props) {
       <div className="cw" style={{ marginBottom: 12 }}>
         <div className="ih">成約数（プロダクト別）</div>
         <div style={{ padding: '16px 8px' }}>
-          <ResponsiveContainer width="100%" height={compact ? 160 : 220}>
+          <ResponsiveContainer width="100%" height={compact ? 200 : 220}>
             <LineChart data={data} margin={{ top: 4, right: 16, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--b1)" />
               <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--muted)' }} />

@@ -272,6 +272,7 @@ export default function Dashboard() {
                     )})}
                   </div>
                 </div>
+                <TrendChart compact={true} />
 
                 <div className="stat-grid">
                   <div className="sc"><div className="sc-ey">VISIOAL LP CVR</div><div className="sc-v">{kpi.visioalCvr}<span style={{ fontSize: 13, fontWeight: 400 }}>%</span></div><div className="sc-sub">GA4</div></div>
@@ -318,7 +319,6 @@ export default function Dashboard() {
                   ))}
                 </div>
 
-                <TrendChart compact={true} />
                 <div className="sh">今週のアクション</div>
                 <div className="tg">
                   {tasks.filter(t => t.st !== 'done' && t.st !== 'todo').slice(0, 4).map((t, i) => (
