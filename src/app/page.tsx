@@ -340,7 +340,7 @@ export default function Dashboard() {
 
             {/* KPI・スケジュールは今後実装 */}
             {view === 'kpi' && <KpiView />}
-            {view === 'schedule' && <div><div className="pg-title">スケジュール</div><GanttView tasks={tasks} onTasksChange={setTasks} /></div>}
+            {view === 'schedule' && <div><div className="pg-title">スケジュール</div><GanttView tasks={tasks} onTasksChange={async (updated) => { setTasks(updated); await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) }) }} /></div>}
 
           </div>
         </main>

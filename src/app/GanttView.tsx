@@ -102,19 +102,10 @@ export default function GanttView({ tasks: propTasks, onTasksChange }: Props) {
     if (propTasks && propTasks.length > 0) setTasks(propTasks)
   }, [propTasks])
 
-  const saveTasks = async (updated: Task[]) => {
-    setSaving(true)
-    try {
-      await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
-      onTasksChange?.(updated)
-    } catch {}
-    setSaving(false)
-  }
-
   const updateStatus = (taskName: string, st: TaskStatus) => {
     const updated = tasks.map(t => t.name === taskName ? { ...t, st } : t)
     setTasks(updated)
-    saveTasks(updated)
+    onTasksChange?.(updated)
   }
 
   const toggleDone = (taskName: string) => {
