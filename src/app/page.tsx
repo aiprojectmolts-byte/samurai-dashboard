@@ -47,7 +47,7 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false)
   const [kpi, setKpi] = useState({
     visioalCvr: 3.2, xImpression: 18.4, noteViews: 4820,
-    referralCount: 3, referralInquiry: 1
+    referralCount: 3, referralInquiry: 1, kgiTotal: 12, kgiPrev: 9, kgiRendery: 4, kgiRenderyPrev: 3, kgiKnock: 5, kgiKnockPrev: 3, kgiVisioal: 2, kgiVisioalPrev: 2, kgiCustom: 1, kgiCustomPrev: 2
   })
   const [modalTask, setModalTask] = useState<Task | null | undefined>(undefined)
   const [lastSaved, setLastSaved] = useState<string | null>(null)
