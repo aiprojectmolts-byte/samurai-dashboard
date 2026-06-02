@@ -1,5 +1,6 @@
 'use client'
 import KpiView from './KpiView'
+import TrendChart from './TrendChart'
 import GanttView from './GanttView'
 import TaskTracker from './TaskTracker'
 import QuestionsView from './QuestionsView'

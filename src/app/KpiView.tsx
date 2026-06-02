@@ -1,4 +1,5 @@
 'use client'
+import TrendChart from './TrendChart'
 
 import { useState, useEffect } from 'react'
 
@@ -256,6 +257,7 @@ export default function KpiView({ onSave }: Props) {
           ))}
         </div>
       </div>
+      <TrendChart />
     </div>
   )
 }
