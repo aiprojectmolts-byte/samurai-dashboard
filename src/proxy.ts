@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const auth = req.headers.get('authorization')
   const user = process.env.BASIC_AUTH_USER || 'samurai'
   const pass = process.env.BASIC_AUTH_PASS || 'molts2024'
