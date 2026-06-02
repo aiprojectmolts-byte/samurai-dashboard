@@ -318,6 +318,7 @@ export default function Dashboard() {
                   ))}
                 </div>
 
+                <TrendChart compact={true} />
                 <div className="sh">今週のアクション</div>
                 <div className="tg">
                   {tasks.filter(t => t.st !== 'done' && t.st !== 'todo').slice(0, 4).map((t, i) => (
@@ -333,7 +334,6 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-              <TrendChart compact={true} />
               </div>
             )}
 
@@ -384,7 +384,6 @@ export default function Dashboard() {
                     <strong style={{color:'var(--ink2)'}}>VISIOALリファラル</strong>：声がけ数・紹介経由の問い合わせ数はSAMURAIが週次でKPIページから入力する。
                   </div>
                 </div>
-              <TrendChart compact={true} />
               </div>
             )}
             {view === 'questions' && <QuestionsView members={members} />}
