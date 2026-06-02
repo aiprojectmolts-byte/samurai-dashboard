@@ -245,17 +245,17 @@ export default function Dashboard() {
                 <div className="kgi-card">
                   <div className="kgi-ey">案件相談数 — 今月合計</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
-                    <span className="kgi-v">12</span>
+                    <span className="kgi-v">{kpi.kgiTotal}</span>
                     <span className="chip cg">+3 先月比</span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8 }}>
-                    {[['Rendery','4','+1','cg'],['knock knock AI','5','+2','cg'],['VISIOAL','2','±0','cn'],['カスタム','1','−1','cr']].map(([label, val, diff, cls]) => (
+                    {[['Rendery', kpi.kgiRendery, kpi.kgiRendery - kpi.kgiRenderyPrev],['knock knock AI', kpi.kgiKnock, kpi.kgiKnock - kpi.kgiKnockPrev],['VISIOAL', kpi.kgiVisioal, kpi.kgiVisioal - kpi.kgiVisioalPrev],['カスタム', kpi.kgiCustom, kpi.kgiCustom - kpi.kgiCustomPrev]].map(([label, val, diff]) => { const cls = (diff as number) > 0 ? 'cg' : (diff as number) < 0 ? 'cr' : 'cn'; const diffStr = (diff as number) > 0 ? '+' + diff : diff === 0 ? '±0' : String(diff); return (
                       <div key={label} style={{ background: 'var(--bg)', border: '0.5px solid var(--b1)', borderRadius: 6, padding: '10px 12px' }}>
                         <div style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 5 }}>{label}</div>
                         <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: 4 }}>{val}</div>
-                        <span className={`chip ${cls}`}>{diff}</span>
+                        <span className={`chip ${cls}`}>{diffStr}</span>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 </div>
 

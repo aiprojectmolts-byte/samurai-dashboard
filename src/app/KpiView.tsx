@@ -21,6 +21,16 @@ interface KpiData {
   srcX: number
   srcReferral: number
   srcDirect: number
+  kgiTotal: number
+  kgiPrev: number
+  kgiRendery: number
+  kgiRenderyPrev: number
+  kgiKnock: number
+  kgiKnockPrev: number
+  kgiVisioal: number
+  kgiVisioalPrev: number
+  kgiCustom: number
+  kgiCustomPrev: number
 }
 
 const defaultKpi: KpiData = {
@@ -29,6 +39,11 @@ const defaultKpi: KpiData = {
   referralCount: 3, referralInquiry: 1, referralDeal: 0,
   inquiryRendery: 4, inquiryKnock: 5, inquiryVisioal: 2, inquiryCustom: 1,
   srcSearch: 5, srcX: 3, srcReferral: 2, srcDirect: 2,
+  kgiTotal: 12, kgiPrev: 9,
+  kgiRendery: 4, kgiRenderyPrev: 3,
+  kgiKnock: 5, kgiKnockPrev: 3,
+  kgiVisioal: 2, kgiVisioalPrev: 2,
+  kgiCustom: 1, kgiCustomPrev: 2,
 }
 
 interface Props {
@@ -112,7 +127,32 @@ export default function KpiView({ onSave }: Props) {
 
       {saving && <div className="save-indicator">保存中...</div>}
 
-      <div className="sh" style={{ marginTop: 0 }}>指標カテゴリ</div>
+      <div className="sh" style={{ marginTop: 0 }}>案件相談数（KGI）</div>
+      <div className="kcat" style={{ marginBottom: 10 }}>
+        <div className="kch"><h3>今月の案件相談数</h3><span className="ttag tt-m">手動入力</span></div>
+        <div className="kr">
+          <div className="kn">合計<span className="ksub">今月</span></div>
+          <div className="kr-r"><EditableVal k="kgiTotal" /> <span style={{fontSize:11,color:'var(--muted)'}}>件</span><span style={{fontSize:11,color:'var(--muted)',margin:'0 6px'}}>先月</span><EditableVal k="kgiPrev" /><span style={{fontSize:11,color:'var(--muted)'}}>件</span></div>
+        </div>
+        <div className="kr">
+          <div className="kn">Rendery</div>
+          <div className="kr-r"><EditableVal k="kgiRendery" /><span style={{fontSize:11,color:'var(--muted)',margin:'0 6px'}}>先月</span><EditableVal k="kgiRenderyPrev" /></div>
+        </div>
+        <div className="kr">
+          <div className="kn">knock knock AI</div>
+          <div className="kr-r"><EditableVal k="kgiKnock" /><span style={{fontSize:11,color:'var(--muted)',margin:'0 6px'}}>先月</span><EditableVal k="kgiKnockPrev" /></div>
+        </div>
+        <div className="kr">
+          <div className="kn">VISIOAL</div>
+          <div className="kr-r"><EditableVal k="kgiVisioal" /><span style={{fontSize:11,color:'var(--muted)',margin:'0 6px'}}>先月</span><EditableVal k="kgiVisioalPrev" /></div>
+        </div>
+        <div className="kr">
+          <div className="kn">カスタム</div>
+          <div className="kr-r"><EditableVal k="kgiCustom" /><span style={{fontSize:11,color:'var(--muted)',margin:'0 6px'}}>先月</span><EditableVal k="kgiCustomPrev" /></div>
+        </div>
+      </div>
+
+      <div className="sh">指標カテゴリ</div>
       <div className="kpi3">
         {/* CVR */}
         <div className="kcat">
