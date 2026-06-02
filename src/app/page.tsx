@@ -274,12 +274,22 @@ export default function Dashboard() {
                 </div>
                 <TrendChart compact={true} />
 
+                {(waiting.length > 0 || delayed.length > 0) && (
+                  <div onClick={() => setView('tasks')} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--rbg)',border:'0.5px solid var(--red)',borderRadius:'var(--r)',padding:'10px 14px',marginBottom:10,cursor:'pointer'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:12}}>
+                      {waiting.length > 0 && <span style={{fontSize:12,color:'var(--red)',fontWeight:600}}>対応待ち {waiting.length}件</span>}
+                      {delayed.length > 0 && <span style={{fontSize:12,color:'var(--orange)',fontWeight:600}}>遅れあり {delayed.length}件</span>}
+                    </div>
+                    <span style={{fontSize:11,color:'var(--muted)'}}>タスクトラッカーを見る →</span>
+                  </div>
+                )}
+
                 <div className="stat-grid">
                   <div className="sc"><div className="sc-ey">VISIOAL LP CVR</div><div className="sc-v">{kpi.visioalCvr}<span style={{ fontSize: 13, fontWeight: 400 }}>%</span></div><div className="sc-sub">GA4</div></div>
                   <div className="sc"><div className="sc-ey">X インプレッション</div><div className="sc-v" style={{ fontSize: 22 }}>{kpi.xImpression}K</div><div className="sc-sub">週次</div></div>
                   <div className="sc"><div className="sc-ey">note 閲覧数</div><div className="sc-v" style={{ fontSize: 22 }}>{kpi.noteViews.toLocaleString()}</div><div className="sc-sub">累計</div></div>
                   <div className="sc"><div className="sc-ey">リファラル声がけ</div><div className="sc-v">{kpi.referralCount}<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)' }}>件</span></div><div className="sc-sub">紹介経由 {kpi.referralInquiry}件</div></div>
-                  <div className="sc"><div className="sc-ey">対応待ち / 遅れあり</div><div className="sc-v" style={{ color: 'var(--red)' }}>{waiting.length}<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--muted)' }}> · </span><span style={{ color: 'var(--orange)' }}>{delayed.length}</span></div><div className="sc-sub" style={{ color: 'var(--red)' }}>要対応</div></div>
+
                 </div>
 
                 <div className="sh">フェーズ進捗</div>
