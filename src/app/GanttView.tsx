@@ -233,7 +233,7 @@ export default function GanttView({ tasks: propTasks, onTasksChange }: Props) {
                 return (
                   <React.Fragment key={"group-" + 施策}>
                     {/* 施策グループ区切り行 */}
-                    <tr`group-${施策}`} className="g-group">
+                    <tr className="g-group">
                       <td className="t-label">{施策}</td>
                       {renderBarCells(groupS, groupE, groupSt, false, true)}
                       <td className="owner-cell"></td>

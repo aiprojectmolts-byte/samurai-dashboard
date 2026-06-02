@@ -1,6 +1,7 @@
 'use client'
 import KpiView from './KpiView'
 import GanttView from './GanttView'
+import TaskModal from './TaskModal'
 
 import { useState, useEffect } from 'react'
 
@@ -43,6 +44,7 @@ export default function Dashboard() {
   const [view, setView] = useState('home')
   const [tasks, setTasks] = useState<Task[]>(defaultTasks)
   const [saving, setSaving] = useState(false)
+  const [modalTask, setModalTask] = useState<Task | null | undefined>(undefined)
   const [lastSaved, setLastSaved] = useState<string | null>(null)
 
   useEffect(() => {
@@ -62,6 +64,23 @@ export default function Dashboard() {
       setLastSaved(`${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`)
     } catch {}
     setSaving(false)
+  }
+
+  const saveTask = async (task: Task, isNew: boolean) => {
+    let updated: Task[]
+    if (isNew) {
+      updated = [...tasks, task]
+    } else {
+      updated = tasks.map(t => t.name === task.name ? task : t)
+    }
+    setTasks(updated)
+    await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+  }
+
+  const deleteTask = async (task: Task) => {
+    const updated = tasks.filter(t => t.name !== task.name)
+    setTasks(updated)
+    await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
   }
 
   const waiting = tasks.filter(t => t.st === 'waiting')
@@ -256,7 +275,7 @@ export default function Dashboard() {
                     <div className="ir" key={i}>
                       <span className="il il-w">対応待ち</span>
                       <div className="ib">
-                        <div className="it">{t.name}</div>
+                        <div className="it" style={{cursor:"pointer"}} onClick={()=>setModalTask(t)}>{t.name}</div>
                         <div className="im"><span className="stag">{t.施策}</span><span className={`ob ${ownerClass[t.own]}`}>{ownerLabel[t.own]}</span></div>
                       </div>
                     </div>
@@ -266,7 +285,7 @@ export default function Dashboard() {
                     <div className="ir" key={i}>
                       <span className="il il-d">遅れあり</span>
                       <div className="ib">
-                        <div className="it">{t.name}</div>
+                        <div className="it" style={{cursor:"pointer"}} onClick={()=>setModalTask(t)}>{t.name}</div>
                         <div className="im"><span className="stag">{t.施策}</span><span className={`ob ${ownerClass[t.own]}`}>{ownerLabel[t.own]}</span>{t.chg && <span className="ctag">期日変更あり</span>}</div>
                       </div>
                     </div>
@@ -294,7 +313,7 @@ export default function Dashboard() {
             {/* タスクトラッカー */}
             {view === 'tasks' && (
               <div>
-                <div className="pg-title">タスクトラッカー</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}><div className="pg-title">タスクトラッカー</div><button onClick={()=>setModalTask(null)} style={{padding:"5px 14px",background:"var(--ink)",color:"#fff",border:"none",borderRadius:"var(--r)",fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>+ タスク追加</button></div>
                 <div className="pg-sub">対応待ち・遅れあり・進行中タスクを優先度別に管理する</div>
                 <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
                   <div className="sc"><div className="sc-ey">対応待ち</div><div className="sc-v" style={{ color: 'var(--red)' }}>{waiting.length}</div><div className="sc-sub" style={{ color: 'var(--red)' }}>即対応</div></div>
@@ -317,7 +336,7 @@ export default function Dashboard() {
                         <div className="ir" key={t.name} style={{ opacity: t.st === 'done' ? 0.4 : 1 }}>
                           <span className={`il ${cls}`}>{t.施策}</span>
                           <div className="ib">
-                            <div className="it">{t.name}</div>
+                            <div className="it" style={{cursor:"pointer"}} onClick={()=>setModalTask(t)}>{t.name}</div>
                             {t.chg && <div className="im"><span className="ctag">期日変更あり</span></div>}
                           </div>
                           <select
@@ -345,6 +364,16 @@ export default function Dashboard() {
           </div>
         </main>
       </div>
+    <>
+      {modalTask !== undefined && (
+        <TaskModal
+          task={modalTask}
+          onSave={saveTask}
+          onDelete={deleteTask}
+          onClose={() => setModalTask(undefined)}
+        />
+      )}
+    </>
     </>
   )
 }
