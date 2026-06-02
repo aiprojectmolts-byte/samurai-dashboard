@@ -90,11 +90,12 @@ const buildGroups = (tasks: Task[]) => {
 interface Props {
   tasks?: Task[]
   onTasksChange?: (tasks: Task[]) => void
+  onEditTask?: (task: Task) => void
 }
 
 const CW = 48
 
-export default function GanttView({ tasks: propTasks, onTasksChange }: Props) {
+export default function GanttView({ tasks: propTasks, onTasksChange, onEditTask }: Props) {
   const [tasks, setTasks] = useState<Task[]>(propTasks || defaultTasks)
   const [saving, setSaving] = useState(false)
 
@@ -242,13 +243,13 @@ export default function GanttView({ tasks: propTasks, onTasksChange }: Props) {
 
                     {/* 子タスク行 */}
                     {groupTasks.map(t => (
-                      <tr key={t.name} className={`g-row${t.st === 'done' ? ' done-row' : ''}`}>
+                      <tr key=<span onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span> className={`g-row${t.st === 'done' ? ' done-row' : ''}`}>
                         <td className="t-label">
                           <div className="row-inner">
                             <div className={`t-check${t.st === 'done' ? ' done' : ''}`} onClick={() => toggleDone(t.name)}>
                               {t.st === 'done' ? '✓' : ''}
                             </div>
-                            <span className="t-name" title={t.name}>{t.name}</span>
+                            <span className="t-name" title=<span onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span>><span onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span></span>
                             {t.st === 'delayed' && <span className="delay-tag">遅れあり</span>}
                             {t.chg && <span className="delay-tag">変更</span>}
                           </div>
