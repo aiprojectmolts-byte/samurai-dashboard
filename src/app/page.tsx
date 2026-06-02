@@ -340,32 +340,7 @@ export default function Dashboard() {
               <div>
                 <div className="pg-title">データ連携</div>
                 <div className="pg-sub">各KPIのデータ取得方法を設定する</div>
-              <div className="sh" style={{marginTop:0}}>担当者管理</div>
-              {(['samurai', 'molts'] as const).map(team => (
-                <div key={team} className="cw" style={{marginBottom:10}}>
-                  <div className="ih">{team === 'samurai' ? 'SAMURAI' : 'THE MOLTS'}</div>
-                  <div style={{padding:16}}>
-                    {members[team].map((name, i) => (
-                      <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-                        <span style={{flex:1,fontSize:12,color:'var(--ink)'}}>{name}</span>
-                        <button onClick={() => {
-                          const updated = {...members, [team]: members[team].filter((_,j) => j !== i)}
-                          setMembers(updated)
-                          fetch('/api/members', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)})
-                        }} style={{fontSize:11,color:'var(--muted)',background:'none',border:'0.5px solid var(--b1)',borderRadius:4,padding:'2px 8px',cursor:'pointer',fontFamily:'inherit'}}>削除</button>
-                      </div>
-                    ))}
-                    <button onClick={() => {
-                      const val = window.prompt('担当者名を入力')
-                      if (val && val.trim()) {
-                        const updated = {...members, [team]: [...members[team], val.trim()]}
-                        setMembers(updated)
-                        fetch('/api/members', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)})
-                      }
-                    }} style={{fontSize:11,background:'none',border:'0.5px solid var(--b1)',borderRadius:'var(--r)',padding:'4px 12px',cursor:'pointer',fontFamily:'inherit'}}>+ 追加</button>
-                  </div>
-                </div>
-              ))}
+              
                 <div className="cw" style={{marginBottom:10}}>
                   <div className="ih">GA4 — Google Analytics 4 <span style={{marginLeft:'auto',fontSize:10,color:'var(--yellow)',background:'var(--ybg)',padding:'2px 8px',borderRadius:20}}>設定待ち</span></div>
                   <div style={{padding:'16px'}}>
