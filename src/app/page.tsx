@@ -3,6 +3,7 @@ import KpiView from './KpiView'
 import GanttView from './GanttView'
 import TaskTracker from './TaskTracker'
 import QuestionsView from './QuestionsView'
+import SlackLogView from './SlackLogView'
 import TaskModal from './TaskModal'
 
 import { useState, useEffect } from 'react'
@@ -238,6 +239,7 @@ export default function Dashboard() {
             タスクトラッカー <span className="nb nb-r">{waiting.length}件</span>
           </div>
 <div className={`ni${view === 'questions' ? ' on' : ''}`} onClick={() => setView('questions')}>質問シート</div>
+          <div className={`ni${view === 'slack' ? ' on' : ''}`} onClick={() => setView('slack')}>コミュニケーションログ</div>
           <div className="sb-div" />
           <div className="sb-grp">設定</div>
           <div className={`ni${view === 'settings' ? ' on' : ''}`} onClick={() => setView('settings')}>データ連携</div>
@@ -383,6 +385,13 @@ export default function Dashboard() {
               </div>
             )}
             {view === 'questions' && <QuestionsView members={members} />}
+            {view === 'slack' && (
+              <div>
+                <div className="pg-title">コミュニケーションログ</div>
+                <div className="pg-sub">Slackチャンネルのメッセージ履歴</div>
+                <SlackLogView members={members} />
+              </div>
+            )}
             {view === 'members' && (
               <div>
                 <div className="pg-title">メンバー管理</div>
