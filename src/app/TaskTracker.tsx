@@ -121,6 +121,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onOpenModa
                   <span className={'ob ' + ownerCls[t.own]}>{t.assignee || ownerLabel[t.own]}</span>
                   {due && <span style={{ fontSize: 10, fontWeight: 500, color: due.color }}>{due.date} ({due.text})</span>}
                   {t.src === 'slack' && <span style={{ fontSize: 9, background: '#eff6ff', color: '#1d4ed8', padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>Slack</span>}
+                  {t.src && t.src !== 'slack' && <span style={{ fontSize: 9, background: '#fef9c3', color: '#854d0e', padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>📋 {t.src.replace(/^\d{4}-\d{2}-\d{2}\s*/, '')}</span>}
                 </div>
                 {t.impact && <div className="id">{t.impact}</div>}
               </div>
