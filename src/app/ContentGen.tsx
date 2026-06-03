@@ -36,6 +36,7 @@ export default function ContentGen() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const [fileNames, setFileNames] = useState<string[]>([])
 
   const inp = {
     width: '100%', padding: '8px 10px', border: '0.5px solid var(--b1)',
@@ -60,11 +61,17 @@ export default function ContentGen() {
   }
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (!f) return
-    const reader = new FileReader()
-    reader.onload = ev => setText(ev.target?.result as string)
-    reader.readAsText(f)
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    setFileNames(files.map(f => f.name))
+    const readers = files.map(f => new Promise<string>(resolve => {
+      const r = new FileReader()
+      r.onload = ev => resolve(ev.target?.result as string)
+      r.readAsText(f)
+    }))
+    Promise.all(readers).then(texts => {
+      setText(texts.join('\n\n---\n\n'))
+    })
   }
 
   // STEP1: 企画エージェント
@@ -177,9 +184,10 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           <div onClick={() => fileRef.current?.click()} style={{ border: '1px dashed var(--b1)', borderRadius: 'var(--r)', padding: 20, textAlign: 'center' as const, cursor: 'pointer', marginBottom: 10 }}>
             <div style={{ fontSize: 20, marginBottom: 4 }}>📄</div>
             <div style={{ fontSize: 12, fontWeight: 500 }}>ファイルをクリックして選択</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>.md / .txt 対応</div>
-            <input ref={fileRef} type="file" accept=".md,.txt" style={{ display: 'none' }} onChange={handleFile} />
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>.md / .txt 対応 — 複数選択可</div>
+            <input ref={fileRef} type="file" accept=".md,.txt" multiple style={{ display: 'none' }} onChange={handleFile} />
           </div>
+          {fileNames.length > 0 && <div style={{ marginBottom: 8 }}>{fileNames.map((name, i) => <span key={i} style={{ fontSize: 10, background: 'var(--gbg)', color: 'var(--green)', padding: '2px 8px', borderRadius: 10, marginRight: 4 }}>✓ {name}</span>)}</div>}
           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>またはテキストを直接貼り付け</label>
           <textarea value={text} onChange={e => setText(e.target.value)} placeholder="MTG議事録を貼り付けてください..." style={{ ...inp, minHeight: 140, resize: 'vertical' as const }} />
           {error && <div style={{ color: 'var(--red)', fontSize: 12, margin: '8px 0' }}>{error}</div>}
