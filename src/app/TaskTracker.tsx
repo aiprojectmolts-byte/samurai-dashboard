@@ -99,6 +99,12 @@ export default function TaskTracker({ tasks, members, onStatusChange, onOpenModa
             <button key={val} onClick={() => setSortBy(val)} style={fbtn(sortBy === val)}>{label}</button>
           ))}
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>ソース元</span>
+          {([['all', 'すべて'], ['slack', 'Slack'], ['fireflies', 'Fireflies'], ['none', 'その他']] as [string,string][]).map(([val, label]) => (
+            <button key={val} onClick={() => setFilterSrc(val)} style={fbtn(filterSrc === val)}>{label}</button>
+          ))}
+        </div>
       </div>
 
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
