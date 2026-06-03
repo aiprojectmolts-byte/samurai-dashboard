@@ -83,6 +83,11 @@ export default function ContentGen() {
     { heading: `【${r.plan.title}】note記事: ${r.content.noteTitle}`, body: `${r.content.noteOutline}\n\n${r.content.noteBody}` }
   ])
 
+  // Word出力
+  // PDF出力
+  // 企画セクションのWord/PDF用テキスト生成
+  // 編集セクション
+  // 執筆セクション
   // 履歴読み込み
   const fetchHistory = async () => {
     const res = await fetch('/api/content-plans')
@@ -421,7 +426,11 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => exportPDF('発信コンテンツ一式')} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
             <button onClick={() => exportWord('発信コンテンツ一式', writingSections(results))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => exportPDF('発信コンテンツ一式')} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
+            <button onClick={() => exportWord('発信コンテンツ一式', writingSections(results))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
             <button onClick={() => { setStep('input'); setPlans([]); setEditedPlans([]); setResults([]); setText('') }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>最初からやり直す</button>
+          </div>
           </div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' as const }}>
