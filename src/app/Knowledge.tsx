@@ -1,7 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 
-const LABELS = ['MTG議事録', '提案書', '参考資料', '会社情報', 'その他']
+const LABELS = ['MTG議事録', '商談ログ', '提案書', '参考資料', '会社情報', 'その他']
 
 const PROMPT_KNOWLEDGE = `このドキュメントを以下の形式でまとめてください。
 ・日付（わかれば）
@@ -70,7 +70,7 @@ export default function Knowledge() {
             messages: [{
               role: 'user',
               content: `以下のテキストを分析してください。
-ラベルは必ず以下から1つ選んでください：MTG議事録、提案書、参考資料、会社情報、その他
+ラベルは必ず以下から1つ選んでください：MTG議事録、商談ログ、提案書、参考資料、会社情報、その他
 JSONのみ返してください：{"label":"ラベル","summary":"2〜3文の要約","date":"日付があれば抽出（YYYY-MM-DD形式、なければ空文字）"}
 
 テキスト：
@@ -120,7 +120,7 @@ ${text.slice(0, 3000)}`
           messages: [{
             role: 'user',
             content: `以下のテキストを分析してください。
-ラベルは必ず以下から1つ選んでください：MTG議事録、提案書、参考資料、会社情報、その他
+ラベルは必ず以下から1つ選んでください：MTG議事録、商談ログ、提案書、参考資料、会社情報、その他
 JSONのみ返してください：{"label":"ラベル","summary":"2〜3文の要約","date":"日付があれば抽出（YYYY-MM-DD形式、なければ空文字）"}
 
 テキスト：
@@ -182,11 +182,11 @@ ${pasteText.slice(0, 3000)}`
   })
 
   const labelColor: Record<string, string> = {
-    'MTG議事録': 'var(--blue)', '提案書': 'var(--green)', '参考資料': 'var(--ink2)',
+    'MTG議事録': 'var(--blue)', '商談ログ': '#7c3aed', '提案書': 'var(--green)', '参考資料': 'var(--ink2)',
     '会社情報': '#8b5cf6', 'その他': 'var(--muted)'
   }
   const labelBg: Record<string, string> = {
-    'MTG議事録': 'var(--bbg)', '提案書': 'var(--gbg)', '参考資料': 'var(--bg)',
+    'MTG議事録': 'var(--bbg)', '商談ログ': '#ede9fe', '提案書': 'var(--gbg)', '参考資料': 'var(--bg)',
     '会社情報': '#f3e8ff', 'その他': 'var(--bg)'
   }
 

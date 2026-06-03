@@ -19,6 +19,8 @@ export default function Competitors() {
   const [analyzingId, setAnalyzingId] = useState<string|null>(null)
   const [analysisResult, setAnalysisResult] = useState<Record<string, string>>({})
   const [addingInfoId, setAddingInfoId] = useState<string|null>(null)
+  const [editingId, setEditingId] = useState<string|null>(null)
+  const [editItem, setEditItem] = useState<any>(null)
   const [addInfoText, setAddInfoText] = useState('')
   const [addInfoSource, setAddInfoSource] = useState('')
   const [savingInfo, setSavingInfo] = useState(false)
@@ -210,6 +212,18 @@ ${text.slice(0, 1500)}`
     setRegistering(false)
   }
 
+  const saveEdit = async () => {
+    if (!editItem) return
+    await fetch('/api/competitors', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editItem)
+    })
+    setEditingId(null)
+    setEditItem(null)
+    await fetchItems()
+  }
+
   const saveAdditionalInfo = async (item: any) => {
     if (!addInfoText.trim()) return
     setSavingInfo(true)
@@ -244,7 +258,7 @@ ${text.slice(0, 1500)}`
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1000,
+          max_tokens: 1500,
           messages: [{
             role: 'user',
             content: `SAMURAI ARCHITECTSの${item.relatedProduct}と競合「${item.competitorName}」のマーケティング分析をしてください。
@@ -380,8 +394,24 @@ ${text.slice(0, 1500)}`
               )}
               {item.pricing && <div style={{ fontSize: 11, color: 'var(--muted)' }}>💰 {item.pricing}</div>}
             </div>
-            <button onClick={() => deleteItem(item.id)} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', flexShrink: 0 }}>✕</button>
+            <button onClick={() => { setEditingId(item.id); setEditItem({...item}) }} style={{ fontSize: 11, color: 'var(--ink2)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', flexShrink: 0 }}>✏️</button>
+                <button onClick={() => deleteItem(item.id)} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', flexShrink: 0 }}>✕</button>
           </div>
+
+          {/* 編集フォーム */}
+          {editingId === item.id && editItem && (
+            <div style={{ marginTop: 10, borderTop: '0.5px solid var(--b1)', paddingTop: 10 }}>
+              <input value={editItem.competitorName || ''} onChange={e => setEditItem({...editItem, competitorName: e.target.value})} style={{ width: '100%', padding: '4px 8px', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 12, fontFamily: 'inherit', marginBottom: 6, boxSizing: 'border-box' as const }} placeholder="競合名" />
+              <select value={editItem.relatedProduct || ''} onChange={e => setEditItem({...editItem, relatedProduct: e.target.value})} style={{ width: '100%', padding: '4px 8px', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 12, fontFamily: 'inherit', marginBottom: 6 }}>
+                {['Rendery','knock knock AI','VISIOAL','カスタムソリューション','その他'].map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <textarea value={editItem.summary || ''} onChange={e => setEditItem({...editItem, summary: e.target.value})} style={{ width: '100%', padding: '4px 8px', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 12, fontFamily: 'inherit', minHeight: 60, resize: 'vertical' as const, marginBottom: 6, boxSizing: 'border-box' as const }} placeholder="概要" />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={saveEdit} style={{ padding: '4px 14px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>保存</button>
+                <button onClick={() => { setEditingId(null); setEditItem(null) }} style={{ padding: '4px 14px', background: 'none', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+              </div>
+            </div>
+          )}
 
           {/* 追加情報 */}
           {item.additionalInfo?.length > 0 && (
@@ -425,9 +455,17 @@ ${text.slice(0, 1500)}`
 
           {/* 分析結果 */}
           {expandedId === item.id && analysisResult[item.id] && (
-            <div style={{ marginTop: 10, background: 'var(--bg)', borderRadius: 6, padding: 14, fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap' as const, color: 'var(--ink2)' }}>
-              {analysisResult[item.id]}
-            </div>
+            <div style={{ marginTop: 10, background: 'var(--bg)', borderRadius: 6, padding: 14, fontSize: 12, lineHeight: 1.8, color: 'var(--ink2)' }}
+              dangerouslySetInnerHTML={{ __html: analysisResult[item.id]
+                .replace(/^## (.+)$/gm, '<h3 style="font-size:13px;font-weight:700;margin:14px 0 6px;color:var(--ink)">$1</h3>')
+                .replace(/^### (.+)$/gm, '<h4 style="font-size:12px;font-weight:600;margin:10px 0 4px;color:var(--ink)">$1</h4>')
+                .replace(/^\*\*(.+?)\*\*/gm, '<strong>$1</strong>')
+                .replace(/^- (.+)$/gm, '<li style="margin-left:16px;margin-bottom:2px">$1</li>')
+                .replace(/^(\d+)\. (.+)$/gm, '<li style="margin-left:16px;margin-bottom:2px"><strong>$1.</strong> $2</li>')
+                .replace(/\n\n/g, '<br/>')
+                .replace(/---/g, '<hr style="border:none;border-top:0.5px solid var(--b1);margin:10px 0"/>')
+              }}
+            />
           )}
         </div>
       ))}
