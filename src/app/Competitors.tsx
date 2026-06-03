@@ -34,17 +34,42 @@ export default function Competitors() {
   }
 
   const autoDetectFromUrl = async (url: string) => {
-    if (!url.includes('youtube.com') && !url.includes('youtu.be')) return
-    const videoId = url.match(/(?:v=|youtu\.be\/)([^&\s]+)/)?.[1]
-    if (!videoId) return
+    if (!url.trim()) return
     setAutoDetecting(true)
     try {
-      // YouTube oEmbed APIでタイトルを即取得（字幕不要）
-      const res = await fetch(`https://www.youtube.com/oembed?url=https://youtube.com/watch?v=${videoId}&format=json`)
-      const data = await res.json()
-      const title = data.title || ''
-      if (title && !competitorName) {
-        setCompetitorName(title)
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        const videoId = url.match(/(?:v=|youtu\.be\/)([^&\s]+)/)?.[1]
+        if (videoId) {
+          const res = await fetch(`https://www.youtube.com/oembed?url=https://youtube.com/watch?v=${videoId}&format=json`)
+          const data = await res.json()
+          if (data.title && !competitorName) setCompetitorName(data.title)
+        }
+      } else {
+        // 通常URLはスクレイピングしてサービス名を取得
+        const res = await fetch('/api/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        })
+        const data = await res.json()
+        if (data.text && !competitorName) {
+          const aiRes = await fetch('/api/claude', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 100,
+              messages: [{ role: 'user', content: `以下のWebページテキストからサービス名・会社名を抽出してください。JSONのみ返してください：{"serviceName":"名前"}
+
+${data.text.slice(0, 500)}` }]
+            })
+          })
+          const aiData = await aiRes.json()
+          const aiText = aiData.content?.[0]?.text || '{}'
+          let meta: any = {}
+          try { meta = JSON.parse(aiText.replace(/\`\`\`json|\`\`\`/g, '').trim()) } catch {}
+          if (meta.serviceName && !competitorName) setCompetitorName(meta.serviceName)
+        }
       }
     } catch (e) { console.error(e) }
     setAutoDetecting(false)
@@ -68,15 +93,24 @@ export default function Competitors() {
       return data.text
     }
 
-    // 通常URL
-    const res = await fetch('/api/scrape', {
+    // 通常URL → スクレイピング、失敗したら競合名で検索
+    try {
+      const res = await fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      })
+      const data = await res.json()
+      if (data.text) return data.text
+    } catch {}
+    // フォールバック：Google検索結果をスクレイピング
+    const searchRes = await fetch('/api/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url: `https://www.google.com/search?q=${encodeURIComponent(competitorName + ' サービス 機能')}` })
     })
-    const data = await res.json()
-    if (data.error) throw new Error(data.error)
-    return data.text
+    const searchData = await searchRes.json()
+    return searchData.text || ''
   }
 
   const register = async () => {
