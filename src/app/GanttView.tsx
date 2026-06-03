@@ -281,7 +281,7 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
             </thead>
             <tbody>
               {sakuGroups.map(施策 => {
-                const groupTasks = tasks.filter(t => t.施策 === 施策)
+                const groupTasks = filteredTasks.filter(t => t.施策 === 施策)
                 const groupS = groupTasks.reduce((min, t) => t.s < min ? t.s : min, groupTasks[0].s)
                 const groupE = groupTasks.reduce((max, t) => t.e > max ? t.e : max, groupTasks[0].e)
                 const groupSt = groupTasks.reduce((worst, t) => {
