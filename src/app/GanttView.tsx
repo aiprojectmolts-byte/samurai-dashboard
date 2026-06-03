@@ -149,7 +149,7 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
     updateStatus(taskName, t.st === 'done' ? 'doing' : 'done')
   }
 
-  const sakuGroups = buildGroups(tasks)
+  const sakuGroups = buildGroups(filteredTasks)
 
   const renderBarCells = (s: string, e: string, st: TaskStatus, chg: boolean, isGroup = false) => {
     const si = weeks.findIndex(w => s <= w.end && e >= w.start)

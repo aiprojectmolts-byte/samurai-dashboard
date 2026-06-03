@@ -28,7 +28,7 @@ export default function QuestionsView({ members }: Props) {
   })
 
   useEffect(() => {
-    fetch('/api/questions').then(r => r.json()).then(rawData => { const data = rawData.map((q: any) => ({ ...q, status: q.status === 'unanswered' ? 'open' : q.status === 'answered' ? 'answered' : q.status, priority: q.priority === 'high' ? 'urgent' : q.priority }));
+    fetch('/api/questions').then(r => r.json()).then(rawData => { const data = rawData.map((q: any) => ({ ...q, status: q.status === 'unanswered' ? 'open' : q.status === 'answered' ? 'answered' : q.status, priority: q.priority === 'high' ? 'urgent' : q.priority, content: q.content || q.text || '', taskName: q.taskName || q.linkedTask || '' }));
       if (Array.isArray(data)) setQuestions(data)
     }).catch(() => {})
   }, [])
