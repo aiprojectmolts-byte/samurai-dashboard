@@ -33,7 +33,7 @@ function dueInfo(e: string) {
 export default function TaskTracker({ tasks, members, onStatusChange, onOpenModal }: Props) {
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterAssignee, setFilterAssignee] = useState('all')
-  const [sortBy, setSortBy] = useState('deadline')
+  const [sortBy, setSortBy] = useState('registered')
 
   const allMembers = [...members.samurai, ...members.molts]
 
@@ -41,6 +41,10 @@ export default function TaskTracker({ tasks, members, onStatusChange, onOpenModa
     .filter(t => filterStatus === 'all' || t.st === filterStatus)
     .filter(t => filterAssignee === 'all' || t.assignee === filterAssignee)
     .sort((a, b) => {
+      if (sortBy === 'registered') {
+        const ai = tasks.indexOf(a), bi = tasks.indexOf(b)
+        return bi - ai  // 新しい順（末尾が新しい）
+      }
       if (sortBy === 'blocker' && (a.blocker ?? false) !== (b.blocker ?? false)) return a.blocker ? -1 : 1
       if (sortBy !== 'registered') {
         const ae = a.e || '9999-99-99', be = b.e || '9999-99-99'
