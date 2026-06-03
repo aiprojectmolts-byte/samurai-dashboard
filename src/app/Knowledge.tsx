@@ -31,8 +31,13 @@ export default function Knowledge() {
         const fd = new FormData()
         fd.append('file', file)
         const extractRes = await fetch('/api/extract-text', { method: 'POST', body: fd })
-        const { text } = await extractRes.json()
-        if (!text) continue
+        const extractData = await extractRes.json()
+        if (!extractRes.ok || !extractData.text) {
+          console.error('extract error:', extractData)
+          alert(`抽出失敗: ${file.name} - ${JSON.stringify(extractData)}`)
+          continue
+        }
+        const text = extractData.text
 
         // AIでラベル＆要約
         const aiRes = await fetch('/api/claude', {

@@ -251,7 +251,7 @@ export default function Dashboard() {
           <div className={`ni${view === 'slack' ? ' on' : ''}`} onClick={() => setView('slack')}>コミュニケーションログ</div>
           <div className={`ni${view === 'mtg-import' ? ' on' : ''}`} onClick={() => setView('mtg-import')}>MTGデータ取り込み</div>
           <div className={`ni${view === 'content-gen' ? ' on' : ''}`} onClick={() => setView('content-gen')}>発信コンテンツ生成</div>
-          <div className={`nav-item${view === 'knowledge' ? ' on' : ''}`} onClick={() => setView('knowledge')}>ナレッジベース</div>
+          <div className={`ni${view === 'knowledge' ? ' on' : ''}`} onClick={() => setView('knowledge')}>ナレッジベース</div>
         </aside>
 
         <main className="main">
