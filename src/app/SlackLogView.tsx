@@ -99,6 +99,17 @@ ${recentLogs.slice(0, 5000)}`
 
   return (
     <div className="cw">
+      <div style={{ padding: '12px 14px', borderBottom: '0.5px solid var(--b1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink2)' }}>コミュニケーションログ</div>
+        <button onClick={extractCompetitors} disabled={extracting || loading} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: extracting ? 'var(--b1)' : 'var(--ink)', color: extracting ? 'var(--muted)' : '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+          {extracting ? '抽出中...' : '🔍 競合情報を抽出'}
+        </button>
+      </div>
+      {extractResult && (
+        <div style={{ margin: '8px 14px', background: 'var(--gbg)', border: '0.5px solid var(--green)', borderRadius: 6, padding: 10, fontSize: 11, whiteSpace: 'pre-wrap' as const, color: 'var(--ink2)' }}>
+          {extractResult}
+        </div>
+      )}
       {loading && <div style={{ padding: '20px 14px', color: 'var(--muted)', fontSize: 12 }}>読み込み中...</div>}
       {!loading && logs.length === 0 && (
         <div style={{ padding: '20px 14px', color: 'var(--muted)', fontSize: 12 }}>
