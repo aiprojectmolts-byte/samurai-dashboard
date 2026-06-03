@@ -99,6 +99,47 @@ export default function ContentGen() {
   // 企画セクションのWord/PDF用テキスト生成
   // 編集セクション
   // 執筆セクション
+  // ナレッジベースに自動登録
+  const saveToKnowledge = async (inputText: string, names: string[]) => {
+    try {
+      const aiRes = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 300,
+          messages: [{
+            role: 'user',
+            content: `以下のテキストを分析してください。
+ラベルは必ず以下から1つ選んでください：MTG議事録、提案書、参考資料、会社情報、その他
+JSONのみ返してください：{"label":"ラベル","summary":"2〜3文の要約","date":"日付があれば抽出（YYYY-MM-DD形式、なければ空文字）"}
+
+テキスト：
+${inputText.slice(0, 3000)}`
+          }]
+        })
+      })
+      const aiData = await aiRes.json()
+      const aiText = aiData.content?.[0]?.text || '{}'
+      let meta = { label: 'その他', summary: '', date: '' }
+      try { meta = JSON.parse(aiText.replace(/\`\`\`json|\`\`\`/g, '').trim()) } catch {}
+
+      await fetch('/api/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: `kb_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          filename: names.length > 0 ? names.join(', ') : `入力テキスト_${new Date().toLocaleDateString('ja-JP')}`,
+          label: meta.label || 'その他',
+          summary: meta.summary || '',
+          date: meta.date || '',
+          text: inputText.slice(0, 10000),
+          createdAt: new Date().toISOString()
+        })
+      })
+    } catch (e) { console.error('knowledge save error:', e) }
+  }
+
   // 履歴読み込み
   const fetchHistory = async () => {
     const res = await fetch('/api/content-plans')
@@ -187,6 +228,7 @@ export default function ContentGen() {
     if (!text.trim()) { setError('ファイルまたはテキストを入力してください'); return }
     setError(''); setLoading(true); setStep('planning')
     try {
+      saveToKnowledge(text, fileNames)
       await fetchHistory()
       const pastPlans = history.length > 0
         ? `\n\n【過去の企画履歴（被りを避けてください）】\n${history.flatMap((h: any) => h.plans || []).map((p: any) => `・${p.title}`).join('\n')}`
