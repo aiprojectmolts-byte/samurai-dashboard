@@ -1,5 +1,7 @@
 'use client'
 import { useState, useRef } from 'react'
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx'
+import { saveAs } from 'file-saver'
 
 interface Plan {
   title: string
@@ -38,6 +40,48 @@ export default function ContentGen() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [history, setHistory] = useState<any[]>([])
   const [showHistory, setShowHistory] = useState(false)
+
+  // Word出力
+  const exportWord = async (title: string, sections: {heading: string, body: string}[]) => {
+    const children: any[] = [
+      new Paragraph({ text: title, heading: HeadingLevel.HEADING_1, spacing: { after: 300 } }),
+    ]
+    sections.forEach(s => {
+      children.push(new Paragraph({ text: s.heading, heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 100 } }))
+      s.body.split('\n').forEach((line: string) => {
+        children.push(new Paragraph({ children: [new TextRun({ text: line, size: 24 })], spacing: { after: 80 } }))
+      })
+    })
+    const doc = new Document({ sections: [{ children }] })
+    const blob = await Packer.toBlob(doc)
+    saveAs(blob, `${title}.docx`)
+  }
+
+  // PDF出力
+  const exportPDF = (title: string) => {
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+    const content = document.getElementById('print-content')?.innerHTML || ''
+    printWindow.document.write(`<html><head><title>${title}</title><style>body{font-family:sans-serif;padding:24px;font-size:13px;line-height:1.7}h1{font-size:20px;margin-bottom:16px}h2{font-size:15px;margin-top:20px;margin-bottom:8px}p{margin:4px 0}.ok{color:green}.ng{color:red}</style></head><body>${content}</body></html>`)
+    printWindow.document.close()
+    printWindow.print()
+  }
+
+  // 企画セクションのWord/PDF用テキスト生成
+  const planSections = (ps: typeof plans) => ps.flatMap(p => [
+    { heading: `企画: ${p.title}`, body: `想定読者: ${p.target}\n切り口: ${p.angle}\n伝えたい核心: ${p.point}` }
+  ])
+
+  // 編集セクション
+  const editSections = (eps: typeof editedPlans) => eps.flatMap(p => [
+    { heading: `企画: ${p.title}`, body: `執筆方針: ${p.direction}\n\nOK表現:\n${p.okExpressions.join('\n')}\n\nNG表現:\n${p.ngExpressions.join('\n')}` }
+  ])
+
+  // 執筆セクション
+  const writingSections = (rs: typeof results) => rs.flatMap(r => [
+    { heading: `【${r.plan.title}】X投稿文`, body: r.content.xPosts.join('\n\n---\n\n') },
+    { heading: `【${r.plan.title}】note記事: ${r.content.noteTitle}`, body: `${r.content.noteOutline}\n\n${r.content.noteBody}` }
+  ])
 
   // 履歴読み込み
   const fetchHistory = async () => {
@@ -308,6 +352,10 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             ))}
           </div>
           {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button onClick={() => exportPDF('企画案')} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
+            <button onClick={() => exportWord('企画案', planSections(plans))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setStep('input')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← やり直す</button>
             <button onClick={runEditing} disabled={loading} style={{ flex: 1, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -341,6 +389,10 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             ))}
           </div>
           {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button onClick={() => exportPDF('企画・編集チェック')} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
+            <button onClick={() => exportWord('企画・編集チェック', editSections(editedPlans))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setStep('planning')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← 企画に戻る</button>
             <button onClick={runWriting} disabled={loading} style={{ flex: 1, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -366,7 +418,11 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>{results.length}件のコンテンツが完成しました</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => exportPDF('発信コンテンツ一式')} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
+            <button onClick={() => exportWord('発信コンテンツ一式', writingSections(results))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
             <button onClick={() => { setStep('input'); setPlans([]); setEditedPlans([]); setResults([]); setText('') }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>最初からやり直す</button>
+          </div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' as const }}>
             {results.map((r, i) => (
