@@ -153,6 +153,11 @@ export default function ContentGen() {
 
   const readFiles = async (files: File[]) => {
     if (files.length === 0) return
+    const oversized = files.filter(f => f.size > 4 * 1024 * 1024)
+    if (oversized.length > 0) {
+      setError(`以下のファイルは4MBを超えています。テキストに変換してから貼り付けてください：${oversized.map(f => ` ${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join(',')}`)
+      return
+    }
     setFileNames(files.map(f => f.name))
     const texts = await Promise.all(files.map(async f => {
       const fd = new FormData()
