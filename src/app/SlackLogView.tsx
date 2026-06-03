@@ -100,7 +100,7 @@ ${recentLogs.slice(0, 5000)}`
     setKnowledgeResult('')
     try {
       const logList = logs.slice(0, 100)
-      const indexedLogs = logList.map((l, i) => `[${i}] ${l.text.slice(0, 80)}`).join('\n')
+      const indexedLogs = logList.map((l, i) => `[${i}] ${l.text.slice(0, 150)}`).join('\n')
 
       // STEP1: 重要なインデックスを特定
       const step1Res = await fetch('/api/claude', {
@@ -160,7 +160,7 @@ ${recentLogs.slice(0, 5000)}`
           body: JSON.stringify({
             id: `kb_slack_${Date.now()}_${Math.random().toString(36).slice(2)}`,
             filename: item.title,
-            label: item.label || 'その他',
+            label: ['商談ログ','MTG議事録','参考資料','会社情報','その他'].includes(item.label) ? item.label : '商談ログ',
             summary: item.summary || '',
             date: new Date().toLocaleDateString('ja-JP'),
             text: item.text || '',
