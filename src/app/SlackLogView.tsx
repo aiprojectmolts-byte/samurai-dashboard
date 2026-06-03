@@ -18,6 +18,8 @@ export default function SlackLogView({ members: _members }: Props) {
   const [loading, setLoading] = useState(true)
   const [extracting, setExtracting] = useState(false)
   const [extractResult, setExtractResult] = useState('')
+  const [savingKnowledge, setSavingKnowledge] = useState(false)
+  const [knowledgeResult, setKnowledgeResult] = useState('')
 
   useEffect(() => {
     fetch('/api/slack-logs').then(r => r.json()).then(data => {
@@ -91,6 +93,66 @@ ${recentLogs.slice(0, 5000)}`
     setExtracting(false)
   }
 
+  const extractToKnowledge = async () => {
+    if (logs.length === 0) return
+    setSavingKnowledge(true)
+    setKnowledgeResult('')
+    try {
+      const recentLogs = logs.slice(0, 100).map(l => `[${l.user}] ${l.text}`).join('\n')
+      const aiRes = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1500,
+          messages: [{
+            role: 'user',
+            content: `以下のSlackログから、ナレッジとして残すべき重要な情報を抽出してください。
+対象：商談内容・顧客の声・業界情報・プロダクトへのフィードバック・重要な意思決定など。
+
+JSONのみ返してください：
+{"items": [{"title": "タイトル", "label": "商談ログ/MTG議事録/参考資料/会社情報/その他のいずれか", "summary": "2〜3文の要約", "text": "関連するSlackメッセージの内容"}]}
+
+抽出すべき情報がなければ {"items": []} を返してください。
+
+Slackログ：
+${recentLogs.slice(0, 5000)}`
+          }]
+        })
+      })
+      const aiData = await aiRes.json()
+      const aiText = aiData.content?.[0]?.text || '{}'
+      let result: any = { items: [] }
+      try { result = JSON.parse(aiText.replace(/```json|```/g, '').trim()) } catch {}
+
+      if (result.items?.length === 0) {
+        setKnowledgeResult('ナレッジとして抽出できる情報は見つかりませんでした')
+        setSavingKnowledge(false)
+        return
+      }
+
+      for (const item of result.items) {
+        await fetch('/api/knowledge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: `kb_slack_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            filename: item.title,
+            label: item.label || 'その他',
+            summary: item.summary || '',
+            date: new Date().toLocaleDateString('ja-JP'),
+            text: item.text || '',
+            createdAt: new Date().toISOString()
+          })
+        })
+      }
+      setKnowledgeResult(`${result.items.length}件をナレッジに登録しました：\n${result.items.map((i: any) => `・[${i.label}] ${i.title}`).join('\n')}`)
+    } catch (e) {
+      setKnowledgeResult('抽出に失敗しました')
+    }
+    setSavingKnowledge(false)
+  }
+
   const formatDate = (ts: string) => {
     const d = new Date(parseFloat(ts) * 1000)
     return d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) + ' ' +
@@ -101,10 +163,20 @@ ${recentLogs.slice(0, 5000)}`
     <div className="cw">
       <div style={{ padding: '12px 14px', borderBottom: '0.5px solid var(--b1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink2)' }}>コミュニケーションログ</div>
-        <button onClick={extractCompetitors} disabled={extracting || loading} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: extracting ? 'var(--b1)' : 'var(--ink)', color: extracting ? 'var(--muted)' : '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-          {extracting ? '抽出中...' : '🔍 競合情報を抽出'}
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={extractCompetitors} disabled={extracting || loading} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: extracting ? 'var(--b1)' : 'var(--ink)', color: extracting ? 'var(--muted)' : '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+            {extracting ? '抽出中...' : '🔍 競合情報を抽出'}
+          </button>
+          <button onClick={extractToKnowledge} disabled={savingKnowledge || loading} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: savingKnowledge ? 'var(--b1)' : 'var(--paper)', color: savingKnowledge ? 'var(--muted)' : 'var(--ink)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+            {savingKnowledge ? '抽出中...' : '📚 ナレッジに追加'}
+          </button>
+        </div>
       </div>
+      {knowledgeResult && (
+        <div style={{ margin: '8px 14px', background: 'var(--bbg)', border: '0.5px solid var(--blue)', borderRadius: 6, padding: 10, fontSize: 11, whiteSpace: 'pre-wrap' as const, color: 'var(--ink2)' }}>
+          {knowledgeResult}
+        </div>
+      )}
       {extractResult && (
         <div style={{ margin: '8px 14px', background: 'var(--gbg)', border: '0.5px solid var(--green)', borderRadius: 6, padding: 10, fontSize: 11, whiteSpace: 'pre-wrap' as const, color: 'var(--ink2)' }}>
           {extractResult}
