@@ -16,6 +16,8 @@ interface Props { members: Members }
 export default function SlackLogView({ members: _members }: Props) {
   const [logs, setLogs] = useState<SlackMessage[]>([])
   const [loading, setLoading] = useState(true)
+  const [extracting, setExtracting] = useState(false)
+  const [extractResult, setExtractResult] = useState('')
 
   useEffect(() => {
     fetch('/api/slack-logs').then(r => r.json()).then(data => {
@@ -23,6 +25,71 @@ export default function SlackLogView({ members: _members }: Props) {
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
+
+  const extractCompetitors = async () => {
+    if (logs.length === 0) return
+    setExtracting(true)
+    setExtractResult('')
+    try {
+      const recentLogs = logs.slice(0, 100).map(l => l.text).join('\n')
+      const aiRes = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1500,
+          messages: [{
+            role: 'user',
+            content: `以下のSlackログから競合サービス・競合会社への言及を抽出してください。
+SAMURAI ARCHITECTSの自社プロダクト（Rendery・knock knock AI・VISIOAL・カスタムソリューション）の競合になりそうなサービス・会社名を見つけてください。
+
+以下の形式でJSONのみ返してください：
+{"competitors": [{"name": "競合名", "relatedProduct": "関連する自社プロダクト", "summary": "どんな文脈で言及されていたか", "rawText": "該当するSlackメッセージ"}]}
+
+競合への言及がなければ {"competitors": []} を返してください。
+
+Slackログ：
+${recentLogs.slice(0, 5000)}`
+          }]
+        })
+      })
+      const aiData = await aiRes.json()
+      const aiText = aiData.content?.[0]?.text || '{}'
+      let result: any = { competitors: [] }
+      try { result = JSON.parse(aiText.replace(/```json|```/g, '').trim()) } catch {}
+
+      if (result.competitors?.length === 0) {
+        setExtractResult('競合への言及は見つかりませんでした')
+        setExtracting(false)
+        return
+      }
+
+      // 競合情報に自動登録
+      for (const comp of result.competitors) {
+        await fetch('/api/competitors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: `comp_slack_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            competitorName: comp.name,
+            relatedProduct: comp.relatedProduct || 'その他',
+            source: 'Slack',
+            sourceType: 'slack',
+            rawText: comp.rawText || '',
+            summary: comp.summary || '',
+            companyName: comp.name,
+            features: [],
+            weaknesses: [],
+            createdAt: new Date().toISOString()
+          })
+        })
+      }
+      setExtractResult(`${result.competitors.length}件の競合情報を競合情報ページに登録しました：\n${result.competitors.map((c: any) => `・${c.name}（${c.relatedProduct}）`).join('\n')}`)
+    } catch (e) {
+      setExtractResult('抽出に失敗しました')
+    }
+    setExtracting(false)
+  }
 
   const formatDate = (ts: string) => {
     const d = new Date(parseFloat(ts) * 1000)
