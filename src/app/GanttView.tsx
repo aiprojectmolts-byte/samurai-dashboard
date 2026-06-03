@@ -114,12 +114,15 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
     .filter(t => filterStatus === 'all' || t.st === filterStatus)
     .filter(t => filterAssignee === 'all' || t.assignee === filterAssignee)
     .sort((a, b) => {
-      if (sortBy === 'blocker' && (a.blocker ?? false) !== (b.blocker ?? false)) return a.blocker ? -1 : 1
-      if (sortBy === 'deadline') {
-        const ae = a.e || '9999-99-99', be = b.e || '9999-99-99'
-        return ae < be ? -1 : ae > be ? 1 : 0
+      if (sortBy === 'registered') {
+        const ai = tasks.indexOf(a), bi = tasks.indexOf(b)
+        return ai - bi
       }
-      return 0
+      if (sortBy === 'blocker') {
+        if ((a.blocker ?? false) !== (b.blocker ?? false)) return a.blocker ? -1 : 1
+      }
+      const ae = a.e || '9999-99-99', be = b.e || '9999-99-99'
+      return ae < be ? -1 : ae > be ? 1 : 0
     })
 
   const fbtn = (active: boolean) => ({
@@ -311,7 +314,7 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
                         </td>
                         {renderBarCells(t.s, t.e, t.st, t.chg)}
                         <td className="owner-cell">
-                          <span className={`ob ${ownerClass[t.own]}`}>{ownerLabel[t.own]}</span>
+                          <span className={`ob ${ownerClass[t.own]}`}>{t.assignee || ownerLabel[t.own]}</span>
                         </td>
                         <td className="action-cell">
                           <select className="st-sel" value={t.st} onChange={e => updateStatus(t.name, e.target.value as TaskStatus)}>
