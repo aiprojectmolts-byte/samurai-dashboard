@@ -36,6 +36,25 @@ export default function ContentGen() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const [history, setHistory] = useState<any[]>([])
+  const [showHistory, setShowHistory] = useState(false)
+
+  // 履歴読み込み
+  const fetchHistory = async () => {
+    const res = await fetch('/api/content-plans')
+    const data = await res.json()
+    setHistory(data)
+  }
+
+  // 企画を履歴に保存
+  const saveToHistory = async (plans: any[], date: string) => {
+    await fetch('/api/content-plans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plans, date, fileNames })
+    })
+    fetchHistory()
+  }
   const [dragging, setDragging] = useState(false)
   const [fileNames, setFileNames] = useState<string[]>([])
 
@@ -83,12 +102,16 @@ export default function ContentGen() {
     if (!text.trim()) { setError('MTGデータを入力してください'); return }
     setError(''); setLoading(true); setStep('planning')
     try {
+      await fetchHistory()
+      const pastPlans = history.length > 0
+        ? `\n\n【過去の企画履歴（被りを避けてください）】\n${history.flatMap((h: any) => h.plans || []).map((p: any) => `・${p.title}`).join('\n')}`
+        : ''
       const result = await callClaude(
         `あなたはSAMURAI ARCHITECTSの企画担当AIです。
 MTG議事録から「加藤CEOが外部発信すべきテーマ」を抽出します。
 建築×AIの文脈で、業界に価値を届けられる企画を考えてください。
 JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心"}]}`,
-        `以下のMTG議事録から発信企画を3つ考えてください。\n\n${text.slice(0, 6000)}`
+        `以下のMTG議事録から発信企画を3つ考えてください。${pastPlans}\n\n${text.slice(0, 6000)}`
       )
       setPlans(result.plans)
     } catch (e) {
@@ -138,6 +161,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
       setResults(finalResults)
       setStep('done')
       setSelectedResult(0)
+      await saveToHistory(editedPlans, new Date().toLocaleDateString('ja-JP'))
     } catch (e) {
       setError('執筆に失敗しました。'); setStep('editing')
     } finally {
@@ -157,9 +181,39 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
 
   return (
     <div style={{ maxWidth: 820 }}>
-      <div className="pg-title">発信コンテンツ生成</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+        <div className="pg-title">発信コンテンツ生成</div>
+        <button onClick={() => { setShowHistory(!showHistory); fetchHistory() }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+          {showHistory ? '← 生成に戻る' : '📚 過去の企画履歴'}
+        </button>
+      </div>
       <div className="pg-sub">企画 → 編集 → 執筆の3エージェントがMTGから発信コンテンツを自動生成します</div>
 
+      {/* 履歴ビュー */}
+      {showHistory && (
+        <div>
+          {history.length === 0 ? (
+            <div style={{ padding: 20, color: 'var(--muted)', fontSize: 12 }}>履歴がありません</div>
+          ) : (
+            history.map((h: any, i: number) => (
+              <div key={i} style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16, marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600 }}>{h.date}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)' }}>{h.fileNames?.join(', ')}</div>
+                </div>
+                {h.plans?.map((p: any, j: number) => (
+                  <div key={j} style={{ background: 'var(--bg)', borderRadius: 4, padding: '6px 10px', marginBottom: 6, fontSize: 12 }}>
+                    <span style={{ fontWeight: 600 }}>{p.title}</span>
+                    <span style={{ color: 'var(--muted)', marginLeft: 8 }}>{p.target}</span>
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {!showHistory && <>
       {/* ステップインジケーター */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
         {(['input','planning','editing','writing','done'] as const).map((s, i) => {
@@ -343,6 +397,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           )}
         </div>
       )}
+    </> }
     </div>
   )
 }
