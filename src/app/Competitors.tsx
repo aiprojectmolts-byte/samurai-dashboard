@@ -17,6 +17,10 @@ export default function Competitors() {
   const [expandedId, setExpandedId] = useState<string|null>(null)
   const [analyzingId, setAnalyzingId] = useState<string|null>(null)
   const [analysisResult, setAnalysisResult] = useState<Record<string, string>>({})
+  const [addingInfoId, setAddingInfoId] = useState<string|null>(null)
+  const [addInfoText, setAddInfoText] = useState('')
+  const [addInfoSource, setAddInfoSource] = useState('')
+  const [savingInfo, setSavingInfo] = useState(false)
 
   useEffect(() => { fetchItems() }, [])
 
@@ -131,6 +135,32 @@ ${text.slice(0, 4000)}`
       alert(`エラー: ${e.message}`)
     }
     setRegistering(false)
+  }
+
+  const saveAdditionalInfo = async (item: any) => {
+    if (!addInfoText.trim()) return
+    setSavingInfo(true)
+    const updated = { ...item }
+    updated.additionalInfo = updated.additionalInfo || []
+    updated.additionalInfo.push({
+      date: new Date().toLocaleDateString('ja-JP'),
+      source: addInfoSource || '手動入力',
+      sourceType: 'manual',
+      summary: addInfoText,
+      rawText: addInfoText,
+      features: [],
+      weaknesses: [],
+    })
+    await fetch('/api/competitors', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated)
+    })
+    setAddingInfoId(null)
+    setAddInfoText('')
+    setAddInfoSource('')
+    await fetchItems()
+    setSavingInfo(false)
   }
 
   const analyzeVsOurs = async (item: any) => {
@@ -279,6 +309,31 @@ ${text.slice(0, 4000)}`
             <button onClick={() => deleteItem(item.id)} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', flexShrink: 0 }}>✕</button>
           </div>
 
+          {/* 追加情報 */}
+          {item.additionalInfo?.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>📌 追加情報（{item.additionalInfo.length}件）</div>
+              {item.additionalInfo.map((info: any, i: number) => (
+                <div key={i} style={{ background: 'var(--bg)', borderRadius: 4, padding: '6px 10px', marginBottom: 4, fontSize: 11, borderLeft: '2px solid var(--b1)' }}>
+                  <span style={{ color: 'var(--muted)', marginRight: 6 }}>{info.date} [{info.source}]</span>
+                  {info.summary}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 情報追加フォーム */}
+          {addingInfoId === item.id && (
+            <div style={{ marginTop: 8, background: 'var(--bg)', borderRadius: 6, padding: 10 }}>
+              <input value={addInfoSource} onChange={e => setAddInfoSource(e.target.value)} placeholder="ソース（Slack・URL・メモなど）" style={{ width: '100%', padding: '4px 8px', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 11, fontFamily: 'inherit', marginBottom: 6, boxSizing: 'border-box' as const }} />
+              <textarea value={addInfoText} onChange={e => setAddInfoText(e.target.value)} placeholder="追加情報を入力..." style={{ width: '100%', padding: '4px 8px', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 11, fontFamily: 'inherit', minHeight: 60, resize: 'vertical' as const, marginBottom: 6, boxSizing: 'border-box' as const }} />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => saveAdditionalInfo(item)} disabled={savingInfo} style={{ padding: '3px 12px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>保存</button>
+                <button onClick={() => { setAddingInfoId(null); setAddInfoText(''); setAddInfoSource('') }} style={{ padding: '3px 12px', background: 'none', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+              </div>
+            </div>
+          )}
+
           {/* マーケ分析ボタン */}
           <div style={{ marginTop: 10, borderTop: '0.5px solid var(--b1)', paddingTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
@@ -286,6 +341,7 @@ ${text.slice(0, 4000)}`
               disabled={analyzingId === item.id}
               style={{ fontSize: 11, padding: '4px 14px', background: analyzingId === item.id ? 'var(--b1)' : 'var(--ink)', color: analyzingId === item.id ? 'var(--muted)' : '#fff', border: 'none', borderRadius: 20, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
             >{analyzingId === item.id ? '分析中...' : `📊 ${item.relatedProduct}との比較分析`}</button>
+            <button onClick={() => { setAddingInfoId(addingInfoId === item.id ? null : item.id); setAddInfoText(''); setAddInfoSource('') }} style={{ fontSize: 11, padding: '4px 12px', background: 'none', border: '0.5px solid var(--b1)', borderRadius: 20, cursor: 'pointer', fontFamily: 'inherit' }}>＋ 情報を追加</button>
             {analysisResult[item.id] && (
               <button onClick={() => setExpandedId(expandedId === item.id ? null : item.id)} style={{ fontSize: 11, color: 'var(--ink2)', background: 'none', border: '0.5px solid var(--b1)', borderRadius: 20, padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>
                 {expandedId === item.id ? '閉じる' : '分析結果を見る'}
