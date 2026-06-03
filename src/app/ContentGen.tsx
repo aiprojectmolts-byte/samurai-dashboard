@@ -61,17 +61,17 @@ export default function ContentGen() {
     return JSON.parse(raw.replace(/```json|```/g, '').trim())
   }
 
-  const readFiles = (files: File[]) => {
+  const readFiles = async (files: File[]) => {
     if (files.length === 0) return
     setFileNames(files.map(f => f.name))
-    const readers = files.map(f => new Promise<string>(resolve => {
-      const r = new FileReader()
-      r.onload = ev => resolve(ev.target?.result as string)
-      r.readAsText(f)
+    const texts = await Promise.all(files.map(async f => {
+      const fd = new FormData()
+      fd.append('file', f)
+      const res = await fetch('/api/extract-text', { method: 'POST', body: fd })
+      const data = await res.json()
+      return data.text || ''
     }))
-    Promise.all(readers).then(texts => {
-      setText(texts.join('\n\n---\n\n'))
-    })
+    setText(texts.join('\n\n---\n\n'))
   }
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -189,12 +189,12 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             onClick={() => fileRef.current?.click()}
             onDragOver={e => { e.preventDefault(); setDragging(true) }}
             onDragLeave={() => setDragging(false)}
-            onDrop={e => { e.preventDefault(); setDragging(false); readFiles(Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.md') || f.name.endsWith('.txt'))) }}
+            onDrop={e => { e.preventDefault(); setDragging(false); readFiles(Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.md') || f.name.endsWith('.txt') || f.name.endsWith('.pdf'))) }}
             style={{ border: `1px dashed ${dragging ? 'var(--ink)' : 'var(--b1)'}`, borderRadius: 'var(--r)', padding: 20, textAlign: 'center' as const, cursor: 'pointer', marginBottom: 10, background: dragging ? 'var(--bg)' : 'transparent', transition: 'all 0.15s' }}>
             <div style={{ fontSize: 20, marginBottom: 4 }}>📄</div>
             <div style={{ fontSize: 12, fontWeight: 500 }}>ファイルをクリックして選択</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>.md / .txt 対応 — 複数選択可</div>
-            <input ref={fileRef} type="file" accept=".md,.txt" multiple style={{ display: 'none' }} onChange={handleFile} />
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>.md / .txt / .pdf 対応 — 複数選択可</div>
+            <input ref={fileRef} type="file" accept=".md,.txt,.pdf" multiple style={{ display: 'none' }} onChange={handleFile} />
           </div>
           {fileNames.length > 0 && <div style={{ marginBottom: 8 }}>{fileNames.map((name, i) => <span key={i} style={{ fontSize: 10, background: 'var(--gbg)', color: 'var(--green)', padding: '2px 8px', borderRadius: 10, marginRight: 4 }}>✓ {name}</span>)}</div>}
           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>またはテキストを直接貼り付け</label>
