@@ -16,9 +16,12 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify(body),
     })
-    const data = await response.json()
-    return NextResponse.json(data)
+    const text = await response.text()
+    if (!response.ok) {
+      return NextResponse.json({ error: `Anthropic error ${response.status}`, detail: text }, { status: 500 })
+    }
+    return NextResponse.json(JSON.parse(text))
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 })
+    return NextResponse.json({ error: String(error), stack: (error as any)?.stack }, { status: 500 })
   }
 }
