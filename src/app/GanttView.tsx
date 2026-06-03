@@ -107,12 +107,14 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterAssignee, setFilterAssignee] = useState('all')
   const [sortBy, setSortBy] = useState('registered')
+  const [filterSrc, setFilterSrc] = useState('all')
 
   const allMembers = members ? [...members.samurai, ...members.molts] : []
 
   const filteredTasks = [...tasks]
     .filter(t => filterStatus === 'all' || t.st === filterStatus)
     .filter(t => filterAssignee === 'all' || t.assignee === filterAssignee)
+    .filter(t => filterSrc === 'all' || (filterSrc === 'slack' && t.src === 'slack') || (filterSrc === 'fireflies' && t.src && t.src !== 'slack') || (filterSrc === 'none' && !t.src))
     .sort((a, b) => {
       if (sortBy === 'registered') {
         const ai = tasks.indexOf(a), bi = tasks.indexOf(b)
@@ -245,6 +247,12 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
             <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>並び順</span>
             {[['registered', '登録順'], ['deadline', '期日順'], ['blocker', 'ブロッカー優先']].map(([val, label]) => (
               <button key={val} onClick={() => setSortBy(val)} style={fbtn(sortBy === val)}>{label}</button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>ソース元</span>
+            {[['all', 'すべて'], ['slack', 'Slack'], ['fireflies', 'Fireflies'], ['none', 'その他']].map(([val, label]) => (
+              <button key={val} onClick={() => setFilterSrc(val)} style={fbtn(filterSrc === val)}>{label}</button>
             ))}
           </div>
         </div>
