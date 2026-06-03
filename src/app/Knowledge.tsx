@@ -24,6 +24,11 @@ export default function Knowledge() {
 
   const uploadFiles = async (files: File[]) => {
     if (files.length === 0) return
+    const oversized = files.filter(f => f.size > 4 * 1024 * 1024)
+    if (oversized.length > 0) {
+      alert(`以下のファイルは4MBを超えています。テキストに変換してから貼り付けてください：\n${oversized.map(f => `・${f.name} (${(f.size / 1024 / 1024).toFixed(1)}MB)`).join('\n')}`)
+      return
+    }
     setUploading(true)
     for (const file of files) {
       try {
