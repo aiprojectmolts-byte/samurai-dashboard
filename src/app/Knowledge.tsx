@@ -3,6 +3,17 @@ import { useState, useRef, useEffect } from 'react'
 
 const LABELS = ['MTG議事録', '提案書', '参考資料', '会社情報', 'その他']
 
+const PROMPT_KNOWLEDGE = `このドキュメントを以下の形式でまとめてください。
+・日付（わかれば）
+・文書の種類（MTG議事録/提案書/参考資料など）
+・主要なトピック（3〜5個）
+・重要な決定事項や結論
+・キーワード（10個程度）
+・全体の要約（200字程度）`
+
+const PROMPT_GENERAL = `このドキュメントの要点を構造化してまとめてください。
+日付・種類・概要・重要ポイント・キーワードを含めてください。`
+
 export default function Knowledge() {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -141,6 +152,11 @@ ${text.slice(0, 3000)}`
             <div style={{ fontSize: 11, color: 'var(--muted)' }}>.md / .txt / .pdf — AIが自動でラベル付けします</div>
           </>
         )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        <button onClick={() => { navigator.clipboard.writeText(PROMPT_KNOWLEDGE); alert('コピーしました') }} style={{ fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>📋 NotebookLM用（ナレッジ登録）</button>
+        <button onClick={() => { navigator.clipboard.writeText(PROMPT_GENERAL); alert('コピーしました') }} style={{ fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>📋 汎用プロンプト</button>
       </div>
 
       {/* 検索＆フィルター */}

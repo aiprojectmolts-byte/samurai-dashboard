@@ -28,6 +28,15 @@ interface FinalResult {
   content: Content
 }
 
+const PROMPT_CONTENT = `このドキュメントから、外部発信できる重要なトピックと洞察を抽出してください。
+・どんな課題が議論されたか
+・どんな知見・意見が出たか
+・業界や社会に伝えられる価値のある内容は何か
+箇条書きで出力してください。`
+
+const PROMPT_GENERAL = `このドキュメントの要点を構造化してまとめてください。
+日付・種類・概要・重要ポイント・キーワードを含めてください。`
+
 export default function ContentGen() {
   const [text, setText] = useState('')
   const [step, setStep] = useState<'input'|'planning'|'editing'|'writing'|'done'>('input')
@@ -338,6 +347,10 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             <div style={{ fontSize: 12, fontWeight: 500 }}>ファイルをクリックして選択</div>
             <div style={{ fontSize: 11, color: 'var(--muted)' }}>.md / .txt / .pdf 対応 — 複数選択可</div>
             <input ref={fileRef} type="file" accept=".md,.txt,.pdf" multiple style={{ display: 'none' }} onChange={handleFile} />
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            <button onClick={() => { navigator.clipboard.writeText(PROMPT_CONTENT); alert('コピーしました') }} style={{ fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>📋 NotebookLM用（コンテンツ生成）</button>
+            <button onClick={() => { navigator.clipboard.writeText(PROMPT_GENERAL); alert('コピーしました') }} style={{ fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>📋 汎用プロンプト</button>
           </div>
           {fileNames.length > 0 && <div style={{ marginBottom: 8 }}>{fileNames.map((name, i) => <span key={i} style={{ fontSize: 10, background: 'var(--gbg)', color: 'var(--green)', padding: '2px 8px', borderRadius: 10, marginRight: 4 }}>✓ {name}</span>)}</div>}
           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>またはテキストを直接貼り付け</label>
