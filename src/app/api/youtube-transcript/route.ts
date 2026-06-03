@@ -10,6 +10,10 @@ export async function POST(request: Request) {
     const text = (transcript as any[]).map(s => s.text).join(' ')
     return NextResponse.json({ text, videoId })
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 })
+    const msg = String(error)
+    if (msg.includes('Transcript is disabled')) {
+      return NextResponse.json({ error: 'この動画は字幕が無効です。テキスト貼り付けモードをお使いください。' }, { status: 400 })
+    }
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
