@@ -169,8 +169,9 @@ ${recentLogs.slice(0, 5000)}`
         })
       }
       setKnowledgeResult(`${result.items.length}件をナレッジに登録しました：\n${result.items.map((i: any) => `・[${i.label}] ${i.title}`).join('\n')}`)
-    } catch (e) {
-      setKnowledgeResult('抽出に失敗しました')
+    } catch (e: any) {
+      console.error('knowledge extraction error:', e)
+      setKnowledgeResult('抽出に失敗しました: ' + String(e))
     }
     setSavingKnowledge(false)
   }
