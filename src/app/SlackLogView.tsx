@@ -99,8 +99,37 @@ ${recentLogs.slice(0, 5000)}`
     setSavingKnowledge(true)
     setKnowledgeResult('')
     try {
-      const recentLogs = logs.slice(0, 100).map(l => `[${l.user}] ${l.text}`).join('\n')
-      const aiRes = await fetch('/api/claude', {
+      const logList = logs.slice(0, 100)
+      const indexedLogs = logList.map((l, i) => `[${i}] ${l.text.slice(0, 80)}`).join('\n')
+
+      // STEP1: 重要なインデックスを特定
+      const step1Res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 200,
+          messages: [{
+            role: 'user',
+            content: `以下のSlackログから重要なメッセージの番号を返してください。対象：商談・顧客の声・競合言及・問い合わせ・業界情報。JSONのみ：{"indices":[0,5,12]}\n\n${indexedLogs}`
+          }]
+        })
+      })
+      const step1Data = await step1Res.json()
+      const step1Text = step1Data.content?.[0]?.text || '{"indices":[]}'
+      let indices: number[] = []
+      try { indices = JSON.parse(step1Text.replace(/```json|```/g, '').trim()).indices || [] } catch {}
+      console.log('selected indices:', indices)
+
+      if (indices.length === 0) {
+        setKnowledgeResult('ナレッジとして抽出できる情報は見つかりませんでした')
+        setSavingKnowledge(false)
+        return
+      }
+
+      // STEP2: 選ばれたメッセージを詳細分析
+      const selectedLogs = indices.slice(0, 8).map((i: number) => logList[i]?.text || '').join('\n\n---\n\n')
+      const step2Res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -108,28 +137,15 @@ ${recentLogs.slice(0, 5000)}`
           max_tokens: 1500,
           messages: [{
             role: 'user',
-            content: `以下のSlackログから重要な情報を抽出してください。
-以下のどれかに当てはまるものは必ず抽出してください：
-・顧客・取引先とのやり取り（商談・問い合わせ・メール内容）
-・競合サービスの言及
-・プロダクトへの反応・フィードバック
-・業界情報・市場動向
-・意思決定・重要な議論
-
-ラベルは必ず以下から選んでください：商談ログ、MTG議事録、参考資料、会社情報、その他
-JSONのみ返してください（必ず3件以上抽出してください）：
-{"items": [{"title": "タイトル", "label": "ラベル", "summary": "2〜3文の要約", "text": "該当するSlackメッセージの内容（できるだけ原文を含める）"}]}
-
-Slackログ：
-${recentLogs.slice(0, 5000)}`
+            content: `以下のメッセージをナレッジとして整理してください。ラベルは商談ログ/MTG議事録/参考資料/会社情報/その他から選択。JSONのみ：{"items":[{"title":"タイトル","label":"ラベル","summary":"要約","text":"原文"}]}\n\n${selectedLogs.slice(0, 2000)}`
           }]
         })
       })
-      const aiData = await aiRes.json()
-      const aiText = aiData.content?.[0]?.text || '{}'
+      const step2Data = await step2Res.json()
+      const aiText = step2Data.content?.[0]?.text || '{}'
+      console.log('knowledge AI result:', aiText.slice(0, 300))
       let result: any = { items: [] }
       try { result = JSON.parse(aiText.replace(/```json|```/g, '').trim()) } catch {}
-      console.log('knowledge AI result:', aiText.slice(0, 300))
 
       if (result.items?.length === 0) {
         setKnowledgeResult('ナレッジとして抽出できる情報は見つかりませんでした')
@@ -158,7 +174,6 @@ ${recentLogs.slice(0, 5000)}`
     }
     setSavingKnowledge(false)
   }
-
   const formatDate = (ts: string) => {
     const d = new Date(parseFloat(ts) * 1000)
     return d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) + ' ' +
