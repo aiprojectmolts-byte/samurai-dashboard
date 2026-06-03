@@ -100,7 +100,7 @@ ${recentLogs.slice(0, 5000)}`
     setKnowledgeResult('')
     try {
       const logList = logs.slice(0, 100)
-      const indexedLogs = logList.map((l, i) => `[${i}] ${l.text.slice(0, 150)}`).join('\n')
+      const indexedLogs = logList.map((l, i) => `[${i}] ${(l.text || '').slice(0, 150)}`).join('\n')
 
       // STEP1: 重要なインデックスを特定
       const step1Res = await fetch('/api/claude', {
