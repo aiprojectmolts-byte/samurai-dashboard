@@ -336,7 +336,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           </div>
           {fileNames.length > 0 && <div style={{ marginBottom: 8 }}>{fileNames.map((name, i) => <span key={i} style={{ fontSize: 10, background: 'var(--gbg)', color: 'var(--green)', padding: '2px 8px', borderRadius: 10, marginRight: 4 }}>✓ {name}</span>)}</div>}
           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>またはテキストを直接貼り付け</label>
-          <textarea value={text} onChange={e => setText(e.target.value)} placeholder="MTG議事録を貼り付けてください..." style={{ ...inp, minHeight: 140, resize: 'vertical' as const }} />
+          <textarea value={text} onChange={e => setText(e.target.value)} placeholder="資料をドロップするか、テキストを貼り付けてください..." style={{ ...inp, minHeight: 140, resize: 'vertical' as const }} />
           {error && <div style={{ color: 'var(--red)', fontSize: 12, margin: '8px 0' }}>{error}</div>}
           <button onClick={runPlanning} disabled={loading} style={{ width: '100%', marginTop: 10, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             🎯 企画エージェントを起動する
