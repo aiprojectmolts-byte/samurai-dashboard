@@ -21,6 +21,9 @@ export default function Knowledge() {
   const [search, setSearch] = useState('')
   const [filterLabel, setFilterLabel] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [pasteText, setPasteText] = useState('')
+  const [pasteName, setPasteName] = useState('')
+  const [pasting, setPasting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchItems() }, [])
@@ -102,6 +105,52 @@ ${text.slice(0, 3000)}`
     setUploading(false)
   }
 
+  const uploadText = async () => {
+    if (!pasteText.trim()) return
+    setPasting(true)
+    try {
+      const aiRes = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 300,
+          messages: [{
+            role: 'user',
+            content: `以下のテキストを分析してください。
+ラベルは必ず以下から1つ選んでください：MTG議事録、提案書、参考資料、会社情報、その他
+JSONのみ返してください：{"label":"ラベル","summary":"2〜3文の要約","date":"日付があれば抽出（YYYY-MM-DD形式、なければ空文字）"}
+
+テキスト：
+${pasteText.slice(0, 3000)}`
+          }]
+        })
+      })
+      const aiData = await aiRes.json()
+      const aiText = aiData.content?.[0]?.text || '{}'
+      let meta = { label: 'その他', summary: '', date: '' }
+      try { meta = JSON.parse(aiText.replace(/\`\`\`json|\`\`\`/g, '').trim()) } catch {}
+
+      await fetch('/api/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: `kb_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          filename: pasteName.trim() || `テキスト_${new Date().toLocaleDateString('ja-JP')}`,
+          label: meta.label || 'その他',
+          summary: meta.summary || '',
+          date: meta.date || '',
+          text: pasteText.slice(0, 10000),
+          createdAt: new Date().toISOString()
+        })
+      })
+      setPasteText('')
+      setPasteName('')
+      await fetchItems()
+    } catch (e) { console.error(e) }
+    setPasting(false)
+  }
+
   const deleteItem = async (id: string) => {
     if (!confirm('削除しますか？')) return
     await fetch('/api/knowledge', {
@@ -157,6 +206,28 @@ ${text.slice(0, 3000)}`
       <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
         <button onClick={() => { navigator.clipboard.writeText(PROMPT_KNOWLEDGE); alert('コピーしました') }} style={{ fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>📋 NotebookLM用（ナレッジ登録）</button>
         <button onClick={() => { navigator.clipboard.writeText(PROMPT_GENERAL); alert('コピーしました') }} style={{ fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>📋 汎用プロンプト</button>
+      </div>
+
+      {/* テキスト貼り付け */}
+      <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 14, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 8, color: 'var(--ink2)' }}>📝 テキストを貼り付けて登録</div>
+        <input
+          value={pasteName}
+          onChange={e => setPasteName(e.target.value)}
+          placeholder="タイトル（任意）"
+          style={{ width: '100%', padding: '6px 10px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', fontSize: 12, fontFamily: 'inherit', background: 'var(--bg)', marginBottom: 8, boxSizing: 'border-box' as const }}
+        />
+        <textarea
+          value={pasteText}
+          onChange={e => setPasteText(e.target.value)}
+          placeholder="NotebookLMの出力やテキストを貼り付けてください..."
+          style={{ width: '100%', padding: '8px 10px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', fontSize: 12, fontFamily: 'inherit', background: 'var(--bg)', minHeight: 100, resize: 'vertical' as const, boxSizing: 'border-box' as const, marginBottom: 8 }}
+        />
+        <button
+          onClick={uploadText}
+          disabled={pasting || !pasteText.trim()}
+          style={{ padding: '6px 16px', background: pasteText.trim() ? 'var(--ink)' : 'var(--b1)', color: pasteText.trim() ? '#fff' : 'var(--muted)', border: 'none', borderRadius: 'var(--r)', fontSize: 12, fontWeight: 600, cursor: pasteText.trim() ? 'pointer' : 'default', fontFamily: 'inherit' }}
+        >{pasting ? '登録中...' : '登録する'}</button>
       </div>
 
       {/* 検索＆フィルター */}
