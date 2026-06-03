@@ -34,12 +34,14 @@ export default function TaskTracker({ tasks, members, onStatusChange, onOpenModa
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterAssignee, setFilterAssignee] = useState('all')
   const [sortBy, setSortBy] = useState('registered')
+  const [filterSrc, setFilterSrc] = useState('all')
 
   const allMembers = [...members.samurai, ...members.molts]
 
   const filtered = [...tasks]
     .filter(t => filterStatus === 'all' || t.st === filterStatus)
     .filter(t => filterAssignee === 'all' || t.assignee === filterAssignee)
+    .filter(t => filterSrc === 'all' || (filterSrc === 'slack' && t.src === 'slack') || (filterSrc === 'fireflies' && t.src && t.src !== 'slack') || (filterSrc === 'none' && !t.src))
     .sort((a, b) => {
       if (sortBy === 'registered') {
         const ai = tasks.indexOf(a), bi = tasks.indexOf(b)
