@@ -83,14 +83,26 @@ ${data.text.slice(0, 500)}` }]
 
     // YouTube
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      const res = await fetch('/api/youtube-transcript', {
+      try {
+        const res = await fetch('/api/youtube-transcript', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        })
+        const data = await res.json()
+        if (!data.error) return data.text
+        console.log('transcript failed, falling back to web search...')
+      } catch (e) {
+        console.log('transcript error, falling back...')
+      }
+      // 字幕取得失敗 → サービス名でGoogle検索
+      const searchRes = await fetch('/api/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
+        body: JSON.stringify({ url: `https://www.google.com/search?q=${encodeURIComponent(competitorName + ' service features site:en')}` })
       })
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      return data.text
+      const searchData = await searchRes.json()
+      return searchData.text || `サービス名: ${competitorName}`
     }
 
     // 通常URL → スクレイピング、失敗したら競合名で検索
