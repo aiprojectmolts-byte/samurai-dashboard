@@ -244,7 +244,7 @@ export default function Dashboard() {
           <div className="sb-div" />
           <div className="sb-grp">設定</div>
           <div className={`ni${view === 'settings' ? ' on' : ''}`} onClick={() => setView('settings')}>データ連携</div>
-          <div className={`ni${view === 'mtg-import' && <MtgImport />}
+          <div className={`ni${view === 'mtg-import' ? ' on' : ''}
             {view === 'members' ? ' on' : ''}`} onClick={() => setView('members')}>メンバー管理</div>
           <div className={`ni${view === 'slack' ? ' on' : ''}`} onClick={() => setView('slack')}>コミュニケーションログ</div>
           <div className={`ni${view === 'mtg-import' ? ' on' : ''}`} onClick={() => setView('mtg-import')}>MTGデータ取り込み</div>
