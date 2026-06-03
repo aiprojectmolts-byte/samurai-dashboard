@@ -96,7 +96,7 @@ export default function Competitors() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 400,
+          max_tokens: 600,
           messages: [{
             role: 'user',
             content: `以下のテキストから競合サービスの情報を分析してください。
