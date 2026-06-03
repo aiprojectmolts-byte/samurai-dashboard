@@ -58,13 +58,15 @@ export default function ContentGen() {
   }
 
   // PDF出力
-  const exportPDF = (title: string) => {
+  const exportPDF = (title: string, sections: {heading: string, body: string}[]) => {
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
-    const content = document.getElementById('print-content')?.innerHTML || ''
-    printWindow.document.write(`<html><head><title>${title}</title><style>body{font-family:sans-serif;padding:24px;font-size:13px;line-height:1.7}h1{font-size:20px;margin-bottom:16px}h2{font-size:15px;margin-top:20px;margin-bottom:8px}p{margin:4px 0}.ok{color:green}.ng{color:red}</style></head><body>${content}</body></html>`)
+    const html = sections.map(s =>
+      `<h2>${s.heading}</h2><p style="white-space:pre-wrap">${s.body}</p>`
+    ).join('<hr>')
+    printWindow.document.write(`<html><head><title>${title}</title><style>body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;padding:32px;font-size:13px;line-height:1.8;max-width:800px;margin:0 auto}h1{font-size:22px;margin-bottom:24px;border-bottom:2px solid #333;padding-bottom:8px}h2{font-size:15px;margin-top:24px;margin-bottom:8px;color:#333}p{margin:4px 0;color:#444}hr{border:none;border-top:1px solid #eee;margin:20px 0}@media print{body{padding:16px}}</style></head><body><h1>${title}</h1>${html}</body></html>`)
     printWindow.document.close()
-    printWindow.print()
+    setTimeout(() => printWindow.print(), 300)
   }
 
   // 企画セクションのWord/PDF用テキスト生成
@@ -285,7 +287,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                   </div>
                 ))}
                 <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                  <button onClick={() => exportPDF(`企画_${h.date}`)} style={{ fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📄 PDF</button>
+                  <button onClick={() => exportPDF(`企画_${h.date}`, (h.plans || []).map((p: any) => ({ heading: p.title, body: `想定読者: ${p.target}\n切り口: ${p.angle}\n核心: ${p.point}` })))} style={{ fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📄 PDF</button>
                   <button onClick={() => exportWord(`企画_${h.date}`, (h.plans || []).map((p: any) => ({ heading: p.title, body: `想定読者: ${p.target}\n切り口: ${p.angle}\n核心: ${p.point}${p.direction ? '\n執筆方針: ' + p.direction : ''}` })))} style={{ fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📝 Word</button>
                 </div>
               </div>
@@ -363,7 +365,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <button onClick={async () => { await saveToHistory(plans, new Date().toLocaleDateString('ja-JP')); alert('企画を保存しました') }} style={{ padding: '6px 12px', border: '0.5px solid var(--green)', borderRadius: 'var(--r)', background: 'var(--gbg)', color: 'var(--green)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 600 }}>💾 企画を保存</button>
-            <button onClick={() => exportPDF('企画案')} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
+            <button onClick={() => exportPDF('企画案', planSections(plans))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
             <button onClick={() => exportWord('企画案', planSections(plans))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -401,7 +403,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <button onClick={async () => { await saveToHistory(editedPlans, new Date().toLocaleDateString('ja-JP')); await saveExpressions(editedPlans); alert('編集結果を保存しました') }} style={{ padding: '6px 12px', border: '0.5px solid var(--green)', borderRadius: 'var(--r)', background: 'var(--gbg)', color: 'var(--green)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 600 }}>💾 編集結果を保存</button>
-            <button onClick={() => exportPDF('企画・編集チェック')} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
+            <button onClick={() => exportPDF('企画・編集チェック', editSections(editedPlans))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
             <button onClick={() => exportWord('企画・編集チェック', editSections(editedPlans))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -430,10 +432,10 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>{results.length}件のコンテンツが完成しました</div>
             <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => exportPDF('発信コンテンツ一式')} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
+            <button onClick={() => exportPDF('発信コンテンツ一式', writingSections(results))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
             <button onClick={() => exportWord('発信コンテンツ一式', writingSections(results))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
             <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => exportPDF('発信コンテンツ一式')} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
+            <button onClick={() => exportPDF('発信コンテンツ一式', writingSections(results))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
             <button onClick={() => exportWord('発信コンテンツ一式', writingSections(results))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
             <button onClick={() => { setStep('input'); setPlans([]); setEditedPlans([]); setResults([]); setText('') }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>最初からやり直す</button>
           </div>
