@@ -63,7 +63,7 @@ export default function Competitors() {
 
   const register = async () => {
     if (!competitorName.trim()) { alert('競合名を入力してください'); return }
-    if (!selectedProduct) { alert('関連自社プロダクトを選択してください'); return }
+
     if (inputMode === 'url' && !urlInput.trim()) { alert('URLを入力してください'); return }
     if (inputMode === 'text' && !pasteText.trim()) { alert('テキストを入力してください'); return }
 
@@ -82,7 +82,13 @@ export default function Competitors() {
           messages: [{
             role: 'user',
             content: `以下のテキストから競合サービスの情報を分析してください。
-関連自社プロダクト：${selectedProduct}
+
+SAMURAI ARCHITECTSの自社プロダクト：
+- Rendery: 建築パースをAIで生成。複数メンバーでリアルタイムコラボレーション可能
+- knock knock AI: 空室写真にAIで家具を配置。不動産仲介・賃貸管理会社向け
+- VISIOAL: 建築家がAIを使って企画段階の空間イメージをフォトリアルでビジュアル化するコンサルサービス
+- カスタムソリューション: BIM化・図面解析・オフィスレイアウト自動生成などの受託開発
+
 JSONのみ返してください：{
   "companyName": "会社名",
   "productName": "プロダクト・サービス名",
@@ -91,7 +97,8 @@ JSONのみ返してください：{
   "features": ["主な機能・特徴1", "主な機能・特徴2", "主な機能・特徴3"],
   "weaknesses": ["弱点・できないこと1", "弱点・できないこと2"],
   "pricing": "料金体系（わかれば）",
-  "threat": "自社${selectedProduct}への脅威レベル（高/中/低）と理由"
+  "relatedProduct": "最も競合する自社プロダクト名（Rendery/knock knock AI/VISIOAL/カスタムソリューション のいずれか）",
+  "threat": "該当自社プロダクトへの脅威レベル（高/中/低）と理由"
 }
 
 テキスト：
@@ -110,7 +117,7 @@ ${text.slice(0, 4000)}`
         body: JSON.stringify({
           id: `comp_${Date.now()}_${Math.random().toString(36).slice(2)}`,
           competitorName: competitorName.trim(),
-          relatedProduct: selectedProduct,
+          relatedProduct: meta.relatedProduct || selectedProduct || 'その他',
           source: inputMode === 'url' ? urlInput : 'テキスト入力',
           sourceType: inputMode === 'url' ? (urlInput.includes('youtube') ? 'youtube' : 'web') : 'text',
           rawText: text.slice(0, 10000),
