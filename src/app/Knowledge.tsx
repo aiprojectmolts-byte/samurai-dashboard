@@ -24,6 +24,8 @@ export default function Knowledge() {
   const [pasteText, setPasteText] = useState('')
   const [pasteName, setPasteName] = useState('')
   const [pasting, setPasting] = useState(false)
+  const [editingId, setEditingId] = useState<string|null>(null)
+  const [editItem, setEditItem] = useState<any>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchItems() }, [])
@@ -151,6 +153,18 @@ ${pasteText.slice(0, 3000)}`
     setPasting(false)
   }
 
+  const saveEdit = async () => {
+    if (!editItem) return
+    await fetch('/api/knowledge', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editItem)
+    })
+    setEditingId(null)
+    setEditItem(null)
+    await fetchItems()
+  }
+
   const deleteItem = async (id: string) => {
     if (!confirm('削除しますか？')) return
     await fetch('/api/knowledge', {
@@ -267,10 +281,10 @@ ${pasteText.slice(0, 3000)}`
                 <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{item.filename}</div>
                 {item.summary && <div style={{ fontSize: 11, color: 'var(--ink2)', lineHeight: 1.6 }}>{item.summary}</div>}
               </div>
-              <button
-                onClick={() => deleteItem(item.id)}
-                style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', flexShrink: 0 }}
-              >✕</button>
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                <button onClick={() => { setEditingId(item.id); setEditItem({...item}) }} style={{ fontSize: 11, color: 'var(--ink2)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>✏️</button>
+                <button onClick={() => deleteItem(item.id)} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>✕</button>
+              </div>
             </div>
           </div>
         ))

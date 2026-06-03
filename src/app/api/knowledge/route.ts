@@ -40,3 +40,15 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Failed to delete' }, { status: 500 })
   }
 }
+
+export async function PATCH(request: Request) {
+  try {
+    const updated = await request.json()
+    const existing: any[] = (await redis.get(KEY) as any[]) || []
+    const newList = existing.map((e: any) => e.id === updated.id ? { ...e, ...updated } : e)
+    await redis.set(KEY, newList)
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: 'Failed to update' }, { status: 500 })
+  }
+}
