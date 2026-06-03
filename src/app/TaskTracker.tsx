@@ -24,10 +24,10 @@ const ownerCls: Record<string, string> = { molts: 'ob-m', samurai: 'ob-s', both:
 function dueInfo(e: string) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const d = Math.ceil((new Date(e).getTime() - today.getTime()) / 86400000)
-  if (d < 0) return { text: String(Math.abs(d)) + '日超過', color: 'var(--orange)' }
-  if (d === 0) return { text: '今日', color: 'var(--orange)' }
-  if (d <= 3) return { text: '残' + String(d) + '日', color: 'var(--yellow)' }
-  return { text: '残' + String(d) + '日', color: 'var(--muted)' }
+  if (d < 0) return { text: String(Math.abs(d)) + '日超過', color: 'var(--orange)', date: e.slice(5).replace('-', '/') }
+  if (d === 0) return { text: '今日', color: 'var(--orange)', date: e.slice(5).replace('-', '/') }
+  if (d <= 3) return { text: '残' + String(d) + '日', color: 'var(--yellow)', date: e.slice(5).replace('-', '/') }
+  return { text: '残' + String(d) + '日', color: 'var(--muted)', date: e.slice(5).replace('-', '/') }
 }
 
 export default function TaskTracker({ tasks, members, onStatusChange, onOpenModal }: Props) {
@@ -119,7 +119,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onOpenModa
                 <div className="im">
                   <span className="stag">{t.施策}</span>
                   <span className={'ob ' + ownerCls[t.own]}>{t.assignee || ownerLabel[t.own]}</span>
-                  {due && <span style={{ fontSize: 10, fontWeight: 500, color: due.color }}>{due.text}</span>}
+                  {due && <span style={{ fontSize: 10, fontWeight: 500, color: due.color }}>{due.date} ({due.text})</span>}
                   {t.src === 'slack' && <span style={{ fontSize: 9, background: '#eff6ff', color: '#1d4ed8', padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>Slack</span>}
                 </div>
                 {t.impact && <div className="id">{t.impact}</div>}

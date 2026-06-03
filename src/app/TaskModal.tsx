@@ -35,8 +35,8 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
     : [...members.molts, ...members.samurai]
 
   return (
-    <div style={overlay}>
-      <div style={modal}>
+    <div style={overlay} onClick={onClose}>
+      <div style={modal} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{isNew ? 'タスク追加' : 'タスク編集'}</div>
           <button onClick={onClose} style={closeBtn}>✕</button>
