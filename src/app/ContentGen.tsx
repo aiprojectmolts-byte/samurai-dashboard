@@ -36,6 +36,7 @@ export default function ContentGen() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
   const [fileNames, setFileNames] = useState<string[]>([])
 
   const inp = {
@@ -60,8 +61,7 @@ export default function ContentGen() {
     return JSON.parse(raw.replace(/```json|```/g, '').trim())
   }
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
+  const readFiles = (files: File[]) => {
     if (files.length === 0) return
     setFileNames(files.map(f => f.name))
     const readers = files.map(f => new Promise<string>(resolve => {
@@ -72,6 +72,10 @@ export default function ContentGen() {
     Promise.all(readers).then(texts => {
       setText(texts.join('\n\n---\n\n'))
     })
+  }
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    readFiles(Array.from(e.target.files || []))
   }
 
   // STEP1: 企画エージェント
@@ -181,7 +185,12 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
       {/* STEP1: 入力 */}
       {step === 'input' && (
         <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16 }}>
-          <div onClick={() => fileRef.current?.click()} style={{ border: '1px dashed var(--b1)', borderRadius: 'var(--r)', padding: 20, textAlign: 'center' as const, cursor: 'pointer', marginBottom: 10 }}>
+          <div
+            onClick={() => fileRef.current?.click()}
+            onDragOver={e => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={e => { e.preventDefault(); setDragging(false); readFiles(Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.md') || f.name.endsWith('.txt'))) }}
+            style={{ border: `1px dashed ${dragging ? 'var(--ink)' : 'var(--b1)'}`, borderRadius: 'var(--r)', padding: 20, textAlign: 'center' as const, cursor: 'pointer', marginBottom: 10, background: dragging ? 'var(--bg)' : 'transparent', transition: 'all 0.15s' }}>
             <div style={{ fontSize: 20, marginBottom: 4 }}>📄</div>
             <div style={{ fontSize: 12, fontWeight: 500 }}>ファイルをクリックして選択</div>
             <div style={{ fontSize: 11, color: 'var(--muted)' }}>.md / .txt 対応 — 複数選択可</div>
