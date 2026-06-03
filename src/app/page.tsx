@@ -7,6 +7,7 @@ import QuestionsView from './QuestionsView'
 import SlackLogView from './SlackLogView'
 import TaskModal from './TaskModal'
 import MtgImport from './MtgImport'
+import ContentGen from './ContentGen'
 
 import { useState, useEffect } from 'react'
 
@@ -248,6 +249,7 @@ export default function Dashboard() {
             {view === 'members' ? ' on' : ''}`} onClick={() => setView('members')}>メンバー管理</div>
           <div className={`ni${view === 'slack' ? ' on' : ''}`} onClick={() => setView('slack')}>コミュニケーションログ</div>
           <div className={`ni${view === 'mtg-import' ? ' on' : ''}`} onClick={() => setView('mtg-import')}>MTGデータ取り込み</div>
+          <div className={`ni${view === 'content-gen' ? ' on' : ''}`} onClick={() => setView('content-gen')}>発信コンテンツ生成</div>
         </aside>
 
         <main className="main">
@@ -408,6 +410,7 @@ export default function Dashboard() {
               </div>
             )}
             {view === 'mtg-import' && <MtgImport />}
+            {view === 'content-gen' && <ContentGen />}
             {view === 'members' && (
               <div>
                 <div className="pg-title">メンバー管理</div>
