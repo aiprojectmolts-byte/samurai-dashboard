@@ -8,6 +8,7 @@ import SlackLogView from './SlackLogView'
 import TaskModal from './TaskModal'
 import MtgImport from './MtgImport'
 import ContentGen from './ContentGen'
+import Knowledge from './Knowledge'
 
 import { useState, useEffect } from 'react'
 
