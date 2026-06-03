@@ -35,44 +35,22 @@ export default function Competitors() {
 
   const autoDetectFromUrl = async (url: string) => {
     if (!url.includes('youtube.com') && !url.includes('youtu.be')) return
+    const videoId = url.match(/(?:v=|youtu\.be\/)([^&\s]+)/)?.[1]
+    if (!videoId) return
     setAutoDetecting(true)
     try {
-      const res = await fetch('/api/youtube-transcript', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      })
+      // YouTube oEmbed APIでタイトルを即取得（字幕不要）
+      const res = await fetch(`https://www.youtube.com/oembed?url=https://youtube.com/watch?v=${videoId}&format=json`)
       const data = await res.json()
-      if (!data.text) return
-
-      const aiRes = await fetch('/api/claude', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 200,
-          messages: [{
-            role: 'user',
-            content: `以下の動画字幕からサービス名・会社名を抽出してください。
-JSONのみ返してください：{"serviceName": "サービス名または会社名"}
-見つからなければ {"serviceName": ""} を返してください。
-
-字幕：${data.text.slice(0, 1000)}`
-          }]
-        })
-      })
-      const aiData = await aiRes.json()
-      const aiText = aiData.content?.[0]?.text || '{}'
-      let meta: any = {}
-      try { meta = JSON.parse(aiText.replace(/\`\`\`json|\`\`\`/g, '').trim()) } catch {}
-      if (meta.serviceName && !competitorName) {
-        setCompetitorName(meta.serviceName)
+      const title = data.title || ''
+      if (title && !competitorName) {
+        setCompetitorName(title)
       }
     } catch (e) { console.error(e) }
     setAutoDetecting(false)
   }
 
-  const extractText = async (): Promise<string> => {
+    const extractText = async (): Promise<string> => {
     if (inputMode === 'text') return pasteText
 
     const url = urlInput.trim()
