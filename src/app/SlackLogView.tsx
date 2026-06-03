@@ -59,6 +59,7 @@ ${recentLogs.slice(0, 5000)}`
       const aiText = aiData.content?.[0]?.text || '{}'
       let result: any = { competitors: [] }
       try { result = JSON.parse(aiText.replace(/```json|```/g, '').trim()) } catch {}
+      console.log('knowledge AI result:', aiText.slice(0, 300))
 
       if (result.competitors?.length === 0) {
         setExtractResult('競合への言及は見つかりませんでした')
@@ -124,6 +125,7 @@ ${recentLogs.slice(0, 5000)}`
       const aiText = aiData.content?.[0]?.text || '{}'
       let result: any = { items: [] }
       try { result = JSON.parse(aiText.replace(/```json|```/g, '').trim()) } catch {}
+      console.log('knowledge AI result:', aiText.slice(0, 300))
 
       if (result.items?.length === 0) {
         setKnowledgeResult('ナレッジとして抽出できる情報は見つかりませんでした')
