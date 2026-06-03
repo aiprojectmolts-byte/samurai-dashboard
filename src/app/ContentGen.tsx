@@ -46,6 +46,26 @@ export default function ContentGen() {
     setHistory(data)
   }
 
+  // OK/NG表現を保存
+  const saveExpressions = async (editedPlans: any[]) => {
+    const okAll = editedPlans.flatMap((p: any) => p.okExpressions || [])
+    const ngAll = editedPlans.flatMap((p: any) => p.ngExpressions || [])
+    await fetch('/api/content-expressions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ok: okAll, ng: ngAll, date: new Date().toLocaleDateString('ja-JP') })
+    })
+  }
+
+  // 執筆結果を保存
+  const saveWritings = async (results: any[]) => {
+    await fetch('/api/content-writings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ results, date: new Date().toLocaleDateString('ja-JP'), fileNames })
+    })
+  }
+
   // 企画を履歴に保存
   const saveToHistory = async (plans: any[], date: string) => {
     await fetch('/api/content-plans', {
@@ -125,8 +145,14 @@ JSONのみ返してください：{"plans":[{"title":"企画タイトル","targe
   const runEditing = async () => {
     setError(''); setLoading(true); setStep('editing')
     try {
+      // 過去のNG表現を取得
+      const exRes = await fetch('/api/content-expressions')
+      const exData = await exRes.json()
+      const pastNg = exData.length > 0
+        ? `\n\n【蓄積されたNG表現（必ず避けてください）】\n${[...new Set(exData.flatMap((e: any) => e.ng || []))].slice(0, 20).map((s: any) => `・${s}`).join('\n')}`
+        : ''
       const result = await callClaude(
-        `あなたはSAMURAI ARCHITECTSの編集担当AIです。
+        `あなたはSAMURAI ARCHITECTSの編集担当AIです。${pastNg}
 企画案に対してOK/NG表現と修正方針を出します。
 ルール：
 - 業界を否定・見下す表現はNG（例：「昭和的」「デジタル音痴」「遅れている」）
@@ -136,6 +162,7 @@ JSONのみ返してください：{"editedPlans":[{"title":"","target":"","angle
         `以下の企画案を編集チェックしてください：\n${JSON.stringify(plans, null, 2)}`
       )
       setEditedPlans(result.editedPlans)
+      await saveExpressions(result.editedPlans)
     } catch (e) {
       setError('編集チェックに失敗しました。'); setStep('planning')
     } finally {
@@ -162,6 +189,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
       setStep('done')
       setSelectedResult(0)
       await saveToHistory(editedPlans, new Date().toLocaleDateString('ja-JP'))
+      await saveWritings(finalResults)
     } catch (e) {
       setError('執筆に失敗しました。'); setStep('editing')
     } finally {
