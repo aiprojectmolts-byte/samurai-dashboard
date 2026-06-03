@@ -284,6 +284,10 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                     <span style={{ color: 'var(--muted)', marginLeft: 8 }}>{p.target}</span>
                   </div>
                 ))}
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <button onClick={() => exportPDF(`企画_${h.date}`)} style={{ fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📄 PDF</button>
+                  <button onClick={() => exportWord(`企画_${h.date}`, (h.plans || []).map((p: any) => ({ heading: p.title, body: `想定読者: ${p.target}\n切り口: ${p.angle}\n核心: ${p.point}${p.direction ? '\n執筆方針: ' + p.direction : ''}` })))} style={{ fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📝 Word</button>
+                </div>
               </div>
             ))
           )}
@@ -358,6 +362,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           </div>
           {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button onClick={async () => { await saveToHistory(plans, new Date().toLocaleDateString('ja-JP')); alert('企画を保存しました') }} style={{ padding: '6px 12px', border: '0.5px solid var(--green)', borderRadius: 'var(--r)', background: 'var(--gbg)', color: 'var(--green)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 600 }}>💾 企画を保存</button>
             <button onClick={() => exportPDF('企画案')} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
             <button onClick={() => exportWord('企画案', planSections(plans))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
           </div>
@@ -395,6 +400,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           </div>
           {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button onClick={async () => { await saveToHistory(editedPlans, new Date().toLocaleDateString('ja-JP')); await saveExpressions(editedPlans); alert('編集結果を保存しました') }} style={{ padding: '6px 12px', border: '0.5px solid var(--green)', borderRadius: 'var(--r)', background: 'var(--gbg)', color: 'var(--green)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 600 }}>💾 編集結果を保存</button>
             <button onClick={() => exportPDF('企画・編集チェック')} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
             <button onClick={() => exportWord('企画・編集チェック', editSections(editedPlans))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
           </div>
