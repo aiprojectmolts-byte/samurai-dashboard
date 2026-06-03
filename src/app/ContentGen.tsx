@@ -170,7 +170,7 @@ export default function ContentGen() {
 
   // STEP1: 企画エージェント
   const runPlanning = async () => {
-    if (!text.trim()) { setError('MTGデータを入力してください'); return }
+    if (!text.trim()) { setError('ファイルまたはテキストを入力してください'); return }
     setError(''); setLoading(true); setStep('planning')
     try {
       await fetchHistory()
@@ -179,10 +179,11 @@ export default function ContentGen() {
         : ''
       const result = await callClaude(
         `あなたはSAMURAI ARCHITECTSの企画担当AIです。
-MTG議事録から「加藤CEOが外部発信すべきテーマ」を抽出します。
-建築×AIの文脈で、業界に価値を届けられる企画を考えてください。
+渡された資料・データから「加藤CEOが外部発信すべきテーマ」を抽出します。
+建築×AIの文脈で業界に価値を届けられる企画を考えてください。
+資料の種類（MTG議事録・提案書・メール・PDFなど）は問いません。内容から本質を読み取り企画化してください。
 JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心"}]}`,
-        `以下のMTG議事録から発信企画を3つ考えてください。${pastPlans}\n\n${text.slice(0, 6000)}`
+        `以下の資料から発信企画を3つ考えてください。${pastPlans}\n\n${text.slice(0, 6000)}`
       )
       setPlans(result.plans)
     } catch (e) {
