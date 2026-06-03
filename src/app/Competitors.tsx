@@ -12,6 +12,7 @@ export default function Competitors() {
   const [competitorName, setCompetitorName] = useState('')
   const [selectedProduct, setSelectedProduct] = useState('')
   const [inputMode, setInputMode] = useState<'url'|'text'>('url')
+  const [autoDetecting, setAutoDetecting] = useState(false)
   const [search, setSearch] = useState('')
   const [filterProduct, setFilterProduct] = useState('')
   const [expandedId, setExpandedId] = useState<string|null>(null)
@@ -30,6 +31,45 @@ export default function Competitors() {
     const data = await res.json()
     setItems(data)
     setLoading(false)
+  }
+
+  const autoDetectFromUrl = async (url: string) => {
+    if (!url.includes('youtube.com') && !url.includes('youtu.be')) return
+    setAutoDetecting(true)
+    try {
+      const res = await fetch('/api/youtube-transcript', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      })
+      const data = await res.json()
+      if (!data.text) return
+
+      const aiRes = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 200,
+          messages: [{
+            role: 'user',
+            content: `以下の動画字幕からサービス名・会社名を抽出してください。
+JSONのみ返してください：{"serviceName": "サービス名または会社名"}
+見つからなければ {"serviceName": ""} を返してください。
+
+字幕：${data.text.slice(0, 1000)}`
+          }]
+        })
+      })
+      const aiData = await aiRes.json()
+      const aiText = aiData.content?.[0]?.text || '{}'
+      let meta: any = {}
+      try { meta = JSON.parse(aiText.replace(/\`\`\`json|\`\`\`/g, '').trim()) } catch {}
+      if (meta.serviceName && !competitorName) {
+        setCompetitorName(meta.serviceName)
+      }
+    } catch (e) { console.error(e) }
+    setAutoDetecting(false)
   }
 
   const extractText = async (): Promise<string> => {
@@ -253,11 +293,12 @@ ${text.slice(0, 4000)}`
           <button onClick={() => setInputMode('text')} style={{ fontSize: 11, padding: '3px 12px', borderRadius: 10, border: '0.5px solid var(--b1)', background: inputMode === 'text' ? 'var(--ink)' : 'none', color: inputMode === 'text' ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit' }}>テキスト貼り付け</button>
         </div>
         {inputMode === 'url' ? (
-          <input value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder="https://youtube.com/watch?v=... または https://..." style={{ width: '100%', padding: '6px 10px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', fontSize: 12, fontFamily: 'inherit', background: 'var(--bg)', boxSizing: 'border-box' as const, marginBottom: 8 }} />
+          <input value={urlInput} onChange={e => setUrlInput(e.target.value)} onBlur={e => autoDetectFromUrl(e.target.value)} placeholder="https://youtube.com/watch?v=... または https://..." style={{ width: '100%', padding: '6px 10px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', fontSize: 12, fontFamily: 'inherit', background: 'var(--bg)', boxSizing: 'border-box' as const, marginBottom: 8 }} />
         ) : (
           <textarea value={pasteText} onChange={e => setPasteText(e.target.value)} placeholder="競合サービスの説明文やNotebookLM出力を貼り付け..." style={{ width: '100%', padding: '8px 10px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', fontSize: 12, fontFamily: 'inherit', background: 'var(--bg)', minHeight: 80, resize: 'vertical' as const, boxSizing: 'border-box' as const, marginBottom: 8 }} />
         )}
-        <button onClick={register} disabled={registering} style={{ padding: '6px 20px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+        {autoDetecting && <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>🔍 サービス名を自動取得中...</div>}
+        <button onClick={register} disabled={registering || autoDetecting} style={{ padding: '6px 20px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
           {registering ? '分析・登録中...' : '🔍 分析して登録'}
         </button>
       </div>
