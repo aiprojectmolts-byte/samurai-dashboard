@@ -286,6 +286,20 @@ ${pasteText.slice(0, 3000)}`
                 <button onClick={() => deleteItem(item.id)} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>✕</button>
               </div>
             </div>
+            {editingId === item.id && editItem && (
+              <div style={{ marginTop: 10, borderTop: '0.5px solid var(--b1)', paddingTop: 10 }}>
+                <input value={editItem.filename || ''} onChange={e => setEditItem({...editItem, filename: e.target.value})} style={{ width: '100%', padding: '4px 8px', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 12, fontFamily: 'inherit', marginBottom: 6, boxSizing: 'border-box' as const }} placeholder="タイトル" />
+                <select value={editItem.label || ''} onChange={e => setEditItem({...editItem, label: e.target.value})} style={{ width: '100%', padding: '4px 8px', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 12, fontFamily: 'inherit', marginBottom: 6 }}>
+                  {['MTG議事録','提案書','参考資料','会社情報','その他'].map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+                <textarea value={editItem.summary || ''} onChange={e => setEditItem({...editItem, summary: e.target.value})} style={{ width: '100%', padding: '4px 8px', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 12, fontFamily: 'inherit', minHeight: 60, resize: 'vertical' as const, marginBottom: 6, boxSizing: 'border-box' as const }} placeholder="要約" />
+                <textarea value={editItem.text || ''} onChange={e => setEditItem({...editItem, text: e.target.value})} style={{ width: '100%', padding: '4px 8px', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 12, fontFamily: 'inherit', minHeight: 80, resize: 'vertical' as const, marginBottom: 6, boxSizing: 'border-box' as const }} placeholder="本文" />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={saveEdit} style={{ padding: '4px 14px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>保存</button>
+                  <button onClick={() => { setEditingId(null); setEditItem(null) }} style={{ padding: '4px 14px', background: 'none', border: '0.5px solid var(--b1)', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+                </div>
+              </div>
+            )}
           </div>
         ))
       )}
