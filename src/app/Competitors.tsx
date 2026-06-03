@@ -128,6 +128,8 @@ ${text.slice(0, 1500)}`
       const aiText = aiData.content?.[0]?.text || '{}'
       let meta: any = {}
       try { meta = JSON.parse(aiText.replace(/```json|```/g, '').trim()) } catch {}
+      console.log('AI response:', aiText.slice(0, 500))
+      console.log('meta.relatedProduct:', meta.relatedProduct)
 
       await fetch('/api/competitors', {
         method: 'POST',
