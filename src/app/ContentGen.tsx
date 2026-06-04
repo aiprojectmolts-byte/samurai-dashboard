@@ -338,7 +338,7 @@ ${inputText.slice(0, 3000)}`
 
   // STEP1: 企画エージェント
   const runPlanning = async () => {
-    if (!text.trim()) { setError('ファイルまたはテキストを入力してください'); return }
+    // テキストは任意（ナレッジがあれば空でも動く）
     setError(''); setLoading(true); setStep('planning')
     try {
       saveToKnowledge(text, fileNames)
@@ -545,7 +545,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             style={{ border: `1px dashed ${dragging ? 'var(--ink)' : 'var(--b1)'}`, borderRadius: 'var(--r)', padding: 20, textAlign: 'center' as const, cursor: 'pointer', marginBottom: 10, background: dragging ? 'var(--bg)' : 'transparent', transition: 'all 0.15s' }}>
             <div style={{ fontSize: 20, marginBottom: 4 }}>📄</div>
             <div style={{ fontSize: 12, fontWeight: 500 }}>ファイルをクリックして選択</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>.md / .txt / .pdf 対応 — 複数選択可</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>.md / .txt / .pdf 対応 — 任意（ナレッジから自動生成）</div>
             <input ref={fileRef} type="file" accept=".md,.txt,.pdf" multiple style={{ display: 'none' }} onChange={handleFile} />
           </div>
           <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
@@ -554,7 +554,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           </div>
           {fileNames.length > 0 && <div style={{ marginBottom: 8 }}>{fileNames.map((name, i) => <span key={i} style={{ fontSize: 10, background: 'var(--gbg)', color: 'var(--green)', padding: '2px 8px', borderRadius: 10, marginRight: 4 }}>✓ {name}</span>)}</div>}
           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>またはテキストを直接貼り付け</label>
-          <textarea value={text} onChange={e => setText(e.target.value)} placeholder="資料をドロップするか、テキストを貼り付けてください..." style={{ ...inp, minHeight: 140, resize: 'vertical' as const }} />
+          <textarea value={text} onChange={e => setText(e.target.value)} placeholder="追加情報があれば貼り付けてください（任意）。ナレッジベースの情報から企画を生成します。" style={{ ...inp, minHeight: 140, resize: 'vertical' as const }} />
           {error && <div style={{ color: 'var(--red)', fontSize: 12, margin: '8px 0' }}>{error}</div>}
           <button onClick={runPlanning} disabled={loading} style={{ width: '100%', marginTop: 10, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             🎯 企画エージェントを起動する
