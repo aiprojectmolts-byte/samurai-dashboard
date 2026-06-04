@@ -226,29 +226,9 @@ ${inputText.slice(0, 3000)}`
       const items = [
         ...(p.expressions || []).map((ex: any) => ({
           expression: ex.text,
-          judgment: ex.judgment || '',
+          judgment: '',
           reason: ex.reason || '',
-          type: ex.judgment || '',
-          theme: p.title || '',
-          target: p.target || '',
-          direction: p.direction || '',
-          date
-        })),
-        ...(p.okExpressions || []).map((ex: string) => ({
-          expression: ex,
-          judgment: 'OK',
-          reason: '',
-          type: 'OK',
-          theme: p.title || '',
-          target: p.target || '',
-          direction: p.direction || '',
-          date
-        })),
-        ...(p.ngExpressions || []).map((ex: string) => ({
-          expression: ex,
-          judgment: 'NG',
-          reason: '',
-          type: 'NG',
+          type: '',
           theme: p.title || '',
           target: p.target || '',
           direction: p.direction || '',
