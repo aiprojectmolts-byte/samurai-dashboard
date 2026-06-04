@@ -56,6 +56,7 @@ export default function ContentGen() {
   const [planCount, setPlanCount] = useState(3)
   const [selectedPlanIndices, setSelectedPlanIndices] = useState<Set<number>>(new Set())
   const [writingTab, setWritingTab] = useState<'x' | 'note'>('x')
+  const [writingMode, setWritingMode] = useState<'both' | 'x' | 'note'>('both')
   const [selectedHistoryPlans, setSelectedHistoryPlans] = useState<any[]>([])
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -677,6 +678,14 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setStep('planning')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← 企画に戻る</button>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              {(['both', 'x', 'note'] as const).map(mode => (
+                <button key={mode} onClick={() => setWritingMode(mode)}
+                  style={{ padding: '4px 12px', borderRadius: 20, border: '0.5px solid var(--b1)', background: writingMode === mode ? 'var(--ink)' : 'none', color: writingMode === mode ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>
+                  {mode === 'both' ? 'X + note' : mode === 'x' ? '𝕏 Xのみ' : '📝 noteのみ'}
+                </button>
+              ))}
+            </div>
             <button onClick={runWriting} disabled={loading} style={{ flex: 1, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
               📝 執筆エージェントに渡す
             </button>
