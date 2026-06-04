@@ -28,3 +28,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to save' }, { status: 500 })
   }
 }
+
+export async function DELETE() {
+  try {
+    await redis.del(KEY)
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: 'Failed to clear' }, { status: 500 })
+  }
+}
