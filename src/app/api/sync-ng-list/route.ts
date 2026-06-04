@@ -6,8 +6,10 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    const body = await request.json().catch(() => ({}))
+    const append = body.append || false
     const gasUrl = process.env.GAS_WEBHOOK_URL
     if (!gasUrl) return NextResponse.json({ error: 'GAS_WEBHOOK_URL not set' }, { status: 500 })
 
@@ -40,7 +42,7 @@ export async function POST() {
     const res = await fetch(gasUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items })
+      body: JSON.stringify({ items, append })
     })
     const data = await res.json()
     return NextResponse.json({ success: true, synced: items.length, result: data })
