@@ -104,10 +104,12 @@ export default function ContentGen() {
   ])
 
   // 執筆セクション
-  const writingSections = (rs: typeof results) => rs.flatMap(r => [
-    { heading: `【${r.plan.title}】X投稿文`, body: r.content.xPosts.join('\n\n---\n\n') },
-    { heading: `【${r.plan.title}】note記事: ${r.content.noteTitle}`, body: `${r.content.noteOutline}\n\n${r.content.noteBody}` }
-  ])
+  const writingSections = (rs: typeof results, mode: 'both' | 'x' | 'note' = 'both') => rs.flatMap(r => {
+    const sections = []
+    if (mode !== 'note') sections.push({ heading: `【${r.plan.title}】X投稿文`, body: (r.content.xPosts || []).join('\n\n---\n\n') })
+    if (mode !== 'x') sections.push({ heading: `【${r.plan.title}】note: ${r.content.noteTitle}`, body: r.content.noteBody || '' })
+    return sections
+  })
 
   // Word出力
   // PDF出力
