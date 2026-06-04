@@ -344,13 +344,20 @@ ${inputText.slice(0, 3000)}`
       saveToKnowledge(text, fileNames)
       await fetchHistory()
       const knowledge = await fetchKnowledgeByLabel()
+      // 蓄積されたNG表現を取得
+      const exRes2 = await fetch('/api/content-expressions')
+      const exData2 = await exRes2.json()
+      const pastNgForPlanning = exData2.length > 0
+        ? `\n\n【過去にNGと判定された表現（企画タイトル・切り口に使わないこと）】\n${[...new Set(exData2.flatMap((e: any) => [...(e.ng || []), ...(e.items || []).filter((i: any) => i.judgment === 'NG' || i.type === 'NG').map((i: any) => i.expression || '')]))]
+            .filter(Boolean).slice(0, 30).map((s: any) => `・${s}`).join('\n')}`
+        : ''
       const pastPlans = history.length > 0
         ? `\n\n【過去の企画履歴（被りを避けてください）】\n${history.flatMap((h: any) => h.plans || []).map((p: any) => `・${p.title}`).join('\n')}`
         : ''
       const result = await callClaude(
         `あなたはSAMURAI ARCHITECTSの企画担当AIです。
 渡された資料・データから「加藤CEOが外部発信すべきテーマ」を抽出します。
-建築×AIの文脈で業界に価値を届けられる企画を考えてください。
+建築×AIの文脈で業界に価値を届けられる企画を考えてください。${pastNgForPlanning}
 
 以下の3層の情報を統合して企画を作ってください：
 1. 現場の生の声（商談・MTG）→ 差別化の核心になる
@@ -358,6 +365,7 @@ ${inputText.slice(0, 3000)}`
 3. 競合情報 → 差別化ポイント
 
 「現場で語られた課題 × 自社の強み × 競合との差」が交差する企画が最も価値が高いです。
+NG表現が企画タイトル・切り口・核心に含まれていないことを必ず確認してください。
 JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心"}]}`,
         `以下の情報から発信企画を3つ考えてください。${pastPlans}
 
