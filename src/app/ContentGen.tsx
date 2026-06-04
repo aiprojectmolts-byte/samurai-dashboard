@@ -402,12 +402,13 @@ ${knowledge.competitive}` : ''}`
         : ''
       const result = await callClaude(
         `あなたはSAMURAI ARCHITECTSの編集担当AIです。${pastNg}
-企画案に対してOK/NG表現と修正方針を出します。
+企画案に対して「この企画で使いうる表現候補」を提案してください。判定はしません。
+各表現について、なぜこの文脈で有効か・避けるべきかの理由を必ず書いてください。
 ルール：
-- 業界を否定・見下す表現はNG（例：「昭和的」「デジタル音痴」「遅れている」）
+- 業界を否定・見下す表現は避ける（例：「昭和的」「デジタル音痴」「遅れている」）
 - 変革・進化・可能性を前向きに表現する
 - 加藤CEO個人の言葉として自然な表現にする
-JSONのみ返してください：{"editedPlans":[{"title":"","target":"","angle":"","point":"","okExpressions":["OK表現1","OK表現2","OK表現3"],"ngExpressions":["NG表現1","NG表現2","NG表現3"],"direction":"執筆方針（1〜2文）"}]}`,
+JSONのみ返してください：{"editedPlans":[{"title":"","target":"","angle":"","point":"","expressions":[{"text":"表現候補","reason":"この表現を提案する理由・文脈（必須）"}],"okExpressions":[],"ngExpressions":[],"direction":"執筆方針（1〜2文）"}]}`,
         `以下の企画案を編集チェックしてください：\n${JSON.stringify(plans, null, 2)}`
       )
       const plansWithJudgment = result.editedPlans.map((p: any) => ({
