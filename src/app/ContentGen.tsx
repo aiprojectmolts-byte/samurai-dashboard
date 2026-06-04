@@ -49,6 +49,8 @@ export default function ContentGen() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [history, setHistory] = useState<any[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState('')
 
   // Word出力
   const exportWord = async (title: string, sections: {heading: string, body: string}[]) => {
@@ -138,6 +140,23 @@ ${inputText.slice(0, 3000)}`
         })
       })
     } catch (e) { console.error('knowledge save error:', e) }
+  }
+
+  const syncToSheets = async () => {
+    setSyncing(true)
+    setSyncResult('')
+    try {
+      const res = await fetch('/api/sync-ng-list', { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        setSyncResult(`✓ ${data.synced}件をスプレッドシートに同期しました`)
+      } else {
+        setSyncResult(`エラー: ${data.error}`)
+      }
+    } catch (e) {
+      setSyncResult('同期に失敗しました')
+    }
+    setSyncing(false)
   }
 
   // 履歴読み込み
@@ -318,11 +337,19 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
   return (
     <div style={{ maxWidth: 820 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
         <div className="pg-title">発信コンテンツ生成</div>
+        <button onClick={syncToSheets} disabled={syncing} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>
+          {syncing ? '同期中...' : '📊 NGリストをスプシに同期'}
+        </button>
+      </div>
         <button onClick={() => { setShowHistory(!showHistory); fetchHistory() }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
           {showHistory ? '← 生成に戻る' : '📚 過去の企画履歴'}
         </button>
       </div>
+      {syncResult && (
+        <div style={{ fontSize: 11, color: syncResult.startsWith('✓') ? 'var(--green)' : 'var(--red)', marginBottom: 8 }}>{syncResult}</div>
+      )}
       <div className="pg-sub">企画 → 編集 → 執筆の3エージェントがMTGから発信コンテンツを自動生成します</div>
 
       {/* 履歴ビュー */}
