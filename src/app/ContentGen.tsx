@@ -53,6 +53,7 @@ export default function ContentGen() {
   const [selectedResult, setSelectedResult] = useState(0)
   const [loading, setLoading] = useState(false)
   const [planCount, setPlanCount] = useState(3)
+  const [selectedPlanIndices, setSelectedPlanIndices] = useState<Set<number>>(new Set())
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const [history, setHistory] = useState<any[]>([])
@@ -385,10 +386,11 @@ ${knowledge.competitive}` : ''}`
         ? `\n\n【蓄積されたNG表現（必ず避けてください）】\n${[...new Set(exData.flatMap((e: any) => (e.items || []).filter((i: any) => i.judgment === 'NG').map((i: any) => i.expression || '')))].filter(Boolean).slice(0, 30).map((s: any) => `・${s}`).join('\n')}`
         : ''
       // 3企画ずつバッチ処理
+      const selectedPlans = plans.filter((_, i) => selectedPlanIndices.has(i))
       const batchSize = 3
       const allEditedPlans: any[] = []
-      for (let i = 0; i < plans.length; i += batchSize) {
-        const batch = plans.slice(i, i + batchSize)
+      for (let i = 0; i < selectedPlans.length; i += batchSize) {
+        const batch = selectedPlans.slice(i, i + batchSize)
         const batchResult = await callClaude(
           `あなたはSAMURAI ARCHITECTSの編集担当AIです。${pastNg}
 企画案に対して「この企画で使いうる表現候補」を提案してください。判定はしません。
@@ -569,8 +571,14 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16, marginBottom: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 12 }}>企画エージェントの出力 — {plans.length}件</div>
             {plans.map((p, i) => (
-              <div key={i} style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 12, marginBottom: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>企画{i+1}: {p.title}</div>
+              <div key={i} onClick={() => setSelectedPlanIndices(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s })}
+                style={{ background: selectedPlanIndices.has(i) ? 'var(--gbg)' : 'var(--bg)', borderRadius: 'var(--r)', padding: 12, marginBottom: 8, cursor: 'pointer', border: selectedPlanIndices.has(i) ? '1px solid var(--green)' : '1px solid transparent' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 3, border: '1.5px solid var(--b1)', background: selectedPlanIndices.has(i) ? 'var(--green)' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {selectedPlanIndices.has(i) && <span style={{ color: 'white', fontSize: 10, fontWeight: 700 }}>✓</span>}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>企画{i+1}: {p.title}</div>
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                   {[['想定読者', p.target], ['切り口', p.angle], ['伝えたい核心', p.point]].map(([label, val]) => (
                     <div key={label}>
@@ -590,8 +598,8 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setStep('input')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← やり直す</button>
-            <button onClick={runEditing} disabled={loading} style={{ flex: 1, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              ✍️ 編集エージェントに渡す
+            <button onClick={runEditing} disabled={loading || selectedPlanIndices.size === 0} style={{ flex: 1, padding: 10, background: selectedPlanIndices.size > 0 ? 'var(--ink)' : 'var(--muted)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: selectedPlanIndices.size > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+              ✍️ 選択した{selectedPlanIndices.size}件を編集
             </button>
           </div>
         </div>
