@@ -118,7 +118,7 @@ export default function ContentGen() {
       const voices = data
         .filter((k: any) => ['MTG議事録', '商談ログ'].includes(k.label))
         .slice(0, 10)
-        .map((k: any) => `【${k.filename}】${k.summary || k.text?.slice(0, 200) || ''}`)
+        .map((k: any) => `【業界の現場の声】${k.summary || k.text?.slice(0, 200) || ''}`)
         .join('\n')
 
       const background = data
