@@ -328,7 +328,7 @@ ${inputText.slice(0, 3000)}`
       const exRes2 = await fetch('/api/content-expressions')
       const exData2 = await exRes2.json()
       const pastNgForPlanning = exData2.length > 0
-        ? `\n\n【過去にNGと判定された表現（企画タイトル・切り口に使わないこと）】\n${[...new Set(exData2.flatMap((e: any) => [...(e.ng || []), ...(e.items || []).filter((i: any) => i.judgment === 'NG' || i.type === 'NG').map((i: any) => i.expression || '')]))]
+        ? `\n\n【過去にNGと判定された表現（企画タイトル・切り口に使わないこと）】\n${[...new Set(exData2.flatMap((e: any) => (e.items || []).filter((i: any) => i.judgment === 'NG').map((i: any) => i.expression || '')))]
             .filter(Boolean).slice(0, 30).map((s: any) => `・${s}`).join('\n')}`
         : ''
       const pastPlans = history.length > 0
@@ -378,7 +378,7 @@ ${knowledge.competitive}` : ''}`
       const exRes = await fetch('/api/content-expressions')
       const exData = await exRes.json()
       const pastNg = exData.length > 0
-        ? `\n\n【蓄積されたNG表現（必ず避けてください）】\n${[...new Set(exData.flatMap((e: any) => e.ng || []))].slice(0, 20).map((s: any) => `・${s}`).join('\n')}`
+        ? `\n\n【蓄積されたNG表現（必ず避けてください）】\n${[...new Set(exData.flatMap((e: any) => (e.items || []).filter((i: any) => i.judgment === 'NG').map((i: any) => i.expression || '')))].filter(Boolean).slice(0, 30).map((s: any) => `・${s}`).join('\n')}`
         : ''
       const result = await callClaude(
         `あなたはSAMURAI ARCHITECTSの編集担当AIです。${pastNg}
