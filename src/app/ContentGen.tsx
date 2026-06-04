@@ -542,6 +542,14 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>またはテキストを直接貼り付け</label>
           <textarea value={text} onChange={e => setText(e.target.value)} placeholder="追加情報があれば貼り付けてください（任意）。ナレッジベースの情報から企画を生成します。" style={{ ...inp, minHeight: 140, resize: 'vertical' as const }} />
           {error && <div style={{ color: 'var(--red)', fontSize: 12, margin: '8px 0' }}>{error}</div>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--ink2)' }}>企画数</span>
+            <input type="number" min={1} max={10} value={planCount}
+              onChange={e => setPlanCount(Math.min(10, Math.max(1, Number(e.target.value))))}
+              style={{ width: 50, padding: '4px 8px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', fontSize: 12, fontFamily: 'inherit', textAlign: 'center' as const }}
+            />
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>最大10</span>
+          </div>
           <button onClick={runPlanning} disabled={loading} style={{ width: '100%', marginTop: 10, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
             🎯 企画エージェントを起動する
           </button>
