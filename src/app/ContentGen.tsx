@@ -10,9 +10,16 @@ interface Plan {
   point: string
 }
 
+interface Expression {
+  text: string
+  reason: string
+  judgment: 'OK' | 'NG' | '保留' | ''
+}
+
 interface EditedPlan extends Plan {
   okExpressions: string[]
   ngExpressions: string[]
+  expressions: Expression[]
   direction: string
 }
 
@@ -167,12 +174,39 @@ ${inputText.slice(0, 3000)}`
   }
 
   // OK/NG表現を企画単位で保存
+  const updateJudgment = (planIdx: number, exIdx: number, judgment: string) => {
+    setEditedPlans(prev => prev.map((p, pi) => pi !== planIdx ? p : {
+      ...p,
+      expressions: p.expressions.map((ex: any, ei: number) => ei !== exIdx ? ex : { ...ex, judgment }),
+      okExpressions: pi === planIdx
+        ? p.expressions.filter((_: any, ei: number) => ei === exIdx && judgment === 'OK').map((e: any) => e.text)
+          .concat(p.okExpressions.filter((_: string, ei: number) => true))
+        : p.okExpressions,
+      ngExpressions: pi === planIdx
+        ? p.expressions.filter((_: any, ei: number) => ei === exIdx && judgment === 'NG').map((e: any) => e.text)
+          .concat(p.ngExpressions.filter((_: string, ei: number) => true))
+        : p.ngExpressions
+    }))
+  }
+
   const saveExpressions = async (editedPlans: any[]) => {
     const date = new Date().toLocaleDateString('ja-JP')
     for (const p of editedPlans) {
       const items = [
+        ...(p.expressions || []).map((ex: any) => ({
+          expression: ex.text,
+          judgment: ex.judgment || '',
+          reason: ex.reason || '',
+          type: ex.judgment || '',
+          theme: p.title || '',
+          target: p.target || '',
+          direction: p.direction || '',
+          date
+        })),
         ...(p.okExpressions || []).map((ex: string) => ({
           expression: ex,
+          judgment: 'OK',
+          reason: '',
           type: 'OK',
           theme: p.title || '',
           target: p.target || '',
@@ -181,6 +215,8 @@ ${inputText.slice(0, 3000)}`
         })),
         ...(p.ngExpressions || []).map((ex: string) => ({
           expression: ex,
+          judgment: 'NG',
+          reason: '',
           type: 'NG',
           theme: p.title || '',
           target: p.target || '',
@@ -315,7 +351,17 @@ JSONのみ返してください：{"plans":[{"title":"企画タイトル","targe
 JSONのみ返してください：{"editedPlans":[{"title":"","target":"","angle":"","point":"","okExpressions":["OK表現1","OK表現2","OK表現3"],"ngExpressions":["NG表現1","NG表現2","NG表現3"],"direction":"執筆方針（1〜2文）"}]}`,
         `以下の企画案を編集チェックしてください：\n${JSON.stringify(plans, null, 2)}`
       )
-      setEditedPlans(result.editedPlans)
+      const plansWithJudgment = result.editedPlans.map((p: any) => ({
+        ...p,
+        expressions: (p.expressions || []).map((ex: any) => ({
+          text: typeof ex === 'string' ? ex : ex.text,
+          reason: typeof ex === 'string' ? '' : ex.reason,
+          judgment: ''
+        })),
+        okExpressions: p.okExpressions || [],
+        ngExpressions: p.ngExpressions || []
+      }))
+      setEditedPlans(plansWithJudgment)
       await saveExpressions(result.editedPlans)
     } catch (e) {
       setError('編集チェックに失敗しました。'); setStep('planning')
@@ -504,12 +550,22 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                 <div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 10, lineHeight: 1.6 }}>{p.direction}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--green)', marginBottom: 4 }}>✓ OK表現</div>
-                    {p.okExpressions.map((ex, j) => <div key={j} style={{ background: 'var(--gbg)', borderRadius: 3, padding: '3px 8px', marginBottom: 4, fontSize: 11 }}>{ex}</div>)}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--red)', marginBottom: 4 }}>✗ NG表現</div>
-                    {p.ngExpressions.map((ex, j) => <div key={j} style={{ background: 'var(--rbg)', borderRadius: 3, padding: '3px 8px', marginBottom: 4, fontSize: 11 }}>{ex}</div>)}
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink2)', marginBottom: 6 }}>表現候補（OK/NG/保留を選択してください）</div>
+                    {(p.expressions || []).map((ex: any, j: number) => (
+                      <div key={j} style={{ background: 'var(--bg)', borderRadius: 4, padding: '6px 10px', marginBottom: 6, fontSize: 11 }}>
+                        <div style={{ marginBottom: 4, fontWeight: 500 }}>{ex.text}</div>
+                        {ex.reason && <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6 }}>{ex.reason}</div>}
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {(['OK', 'NG', '保留'] as const).map(j2 => (
+                            <button key={j2} onClick={() => updateJudgment(i, j, j2)}
+                              style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, border: '0.5px solid var(--b1)', cursor: 'pointer', fontFamily: 'inherit',
+                                background: ex.judgment === j2 ? (j2 === 'OK' ? 'var(--green)' : j2 === 'NG' ? 'var(--red)' : 'var(--ink2)') : 'none',
+                                color: ex.judgment === j2 ? '#fff' : 'var(--ink2)'
+                              }}>{j2}</button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

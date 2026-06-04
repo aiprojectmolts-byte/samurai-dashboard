@@ -22,15 +22,16 @@ export async function POST() {
       if (e.items?.length > 0) {
         e.items.forEach((item: any) => items.push({
           expression: item.expression,
-          category: item.type || 'OK',
+          judgment: item.judgment || item.type || '',
           theme: item.theme || theme,
           target: item.target || target,
+          reason: item.reason || '',
           direction: item.direction || direction,
           date: item.date || date
         }))
       } else {
-        ;(e.ng || []).forEach((ng: string) => items.push({ expression: ng, category: 'NG', theme, target, direction, date }))
-        ;(e.ok || []).forEach((ok: string) => items.push({ expression: ok, category: 'OK', theme, target, direction, date }))
+        ;(e.ng || []).forEach((ng: string) => items.push({ expression: ng, judgment: 'NG', theme, target, reason: '', direction, date }))
+        ;(e.ok || []).forEach((ok: string) => items.push({ expression: ok, judgment: 'OK', theme, target, reason: '', direction, date }))
       }
     })
 
