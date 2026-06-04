@@ -37,7 +37,7 @@ export async function POST() {
     const res = await fetch(gasUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items, sheetName: 'OK_NG一覧' })
+      body: JSON.stringify({ items, sheetName: 'OK_NG一覧', overwrite: true })
     })
     const data = await res.json()
     return NextResponse.json({ success: true, synced: items.length, result: data })
