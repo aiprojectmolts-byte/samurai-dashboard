@@ -108,6 +108,37 @@ export default function ContentGen() {
   // 企画セクションのWord/PDF用テキスト生成
   // 編集セクション
   // 執筆セクション
+  // ラベル別にナレッジを取得
+  const fetchKnowledgeByLabel = async () => {
+    try {
+      const res = await fetch('/api/knowledge')
+      const data = await res.json()
+      if (!Array.isArray(data)) return { voices: '', trends: '', background: '', competitive: '' }
+
+      const voices = data
+        .filter((k: any) => ['MTG議事録', '商談ログ'].includes(k.label))
+        .slice(0, 10)
+        .map((k: any) => `【${k.filename}】${k.summary || k.text?.slice(0, 200) || ''}`)
+        .join('\n')
+
+      const background = data
+        .filter((k: any) => ['参考資料', '会社情報'].includes(k.label))
+        .slice(0, 5)
+        .map((k: any) => `【${k.filename}】${k.summary || k.text?.slice(0, 200) || ''}`)
+        .join('\n')
+
+      const competitive = data
+        .filter((k: any) => k.label === '競合情報' || k.filename?.includes('競合'))
+        .slice(0, 5)
+        .map((k: any) => `【${k.filename}】${k.summary || k.text?.slice(0, 200) || ''}`)
+        .join('\n')
+
+      return { voices, background, competitive }
+    } catch {
+      return { voices: '', background: '', competitive: '' }
+    }
+  }
+
   // ナレッジベースに自動登録
   const saveToKnowledge = async (inputText: string, names: string[]) => {
     try {
@@ -312,6 +343,7 @@ ${inputText.slice(0, 3000)}`
     try {
       saveToKnowledge(text, fileNames)
       await fetchHistory()
+      const knowledge = await fetchKnowledgeByLabel()
       const pastPlans = history.length > 0
         ? `\n\n【過去の企画履歴（被りを避けてください）】\n${history.flatMap((h: any) => h.plans || []).map((p: any) => `・${p.title}`).join('\n')}`
         : ''
@@ -319,9 +351,27 @@ ${inputText.slice(0, 3000)}`
         `あなたはSAMURAI ARCHITECTSの企画担当AIです。
 渡された資料・データから「加藤CEOが外部発信すべきテーマ」を抽出します。
 建築×AIの文脈で業界に価値を届けられる企画を考えてください。
-資料の種類（MTG議事録・提案書・メール・PDFなど）は問いません。内容から本質を読み取り企画化してください。
+
+以下の3層の情報を統合して企画を作ってください：
+1. 現場の生の声（商談・MTG）→ 差別化の核心になる
+2. 自社の背景・強み → 文脈と信頼性
+3. 競合情報 → 差別化ポイント
+
+「現場で語られた課題 × 自社の強み × 競合との差」が交差する企画が最も価値が高いです。
 JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心"}]}`,
-        `以下の資料から発信企画を3つ考えてください。${pastPlans}\n\n${text.slice(0, 6000)}`
+        `以下の情報から発信企画を3つ考えてください。${pastPlans}
+
+【今回の入力資料】
+${text.slice(0, 3000)}
+
+${knowledge.voices ? `【現場の生の声（商談・MTG議事録）】
+${knowledge.voices}` : ''}
+
+${knowledge.background ? `【自社背景・参考資料】
+${knowledge.background}` : ''}
+
+${knowledge.competitive ? `【競合情報】
+${knowledge.competitive}` : ''}`
       )
       setPlans(result.plans)
     } catch (e) {
