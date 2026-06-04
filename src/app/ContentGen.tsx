@@ -183,14 +183,18 @@ ${inputText.slice(0, 3000)}`
     } catch (e) { console.error('knowledge save error:', e) }
   }
 
-  const syncToSheets = async () => {
+  const syncToSheets = async (append = false) => {
     setSyncing(true)
     setSyncResult('')
     try {
-      const res = await fetch('/api/sync-ng-list', { method: 'POST' })
+      const res = await fetch('/api/sync-ng-list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ append })
+      })
       const data = await res.json()
       if (data.success) {
-        setSyncResult(`✓ ${data.synced}件をスプレッドシートに同期しました`)
+        setSyncResult(`✓ ${data.synced}件を${append ? '追記' : '上書き'}同期しました`)
       } else {
         setSyncResult(`エラー: ${data.error}`)
       }
@@ -466,9 +470,14 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
         <div className="pg-title">発信コンテンツ生成</div>
-        <button onClick={syncToSheets} disabled={syncing} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>
-          {syncing ? '同期中...' : '📊 NGリストをスプシに同期'}
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => syncToSheets(false)} disabled={syncing} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>
+            {syncing ? '同期中...' : '📊 上書き同期'}
+          </button>
+          <button onClick={() => syncToSheets(true)} disabled={syncing} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>
+            {syncing ? '同期中...' : '📊 追記同期'}
+          </button>
+        </div>
       </div>
         <button onClick={() => { setShowHistory(!showHistory); fetchHistory() }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
           {showHistory ? '← 生成に戻る' : '📚 過去の企画履歴'}
