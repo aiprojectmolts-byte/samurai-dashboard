@@ -29,9 +29,6 @@ export async function POST() {
           direction: item.direction || direction,
           date: item.date || date
         }))
-      } else {
-        ;(e.ng || []).forEach((ng: string) => items.push({ expression: ng, judgment: 'NG', theme, target, reason: '', direction, date }))
-        ;(e.ok || []).forEach((ok: string) => items.push({ expression: ok, judgment: 'OK', theme, target, reason: '', direction, date }))
       }
     })
 
