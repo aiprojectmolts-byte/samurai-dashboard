@@ -384,8 +384,13 @@ ${knowledge.competitive}` : ''}`
       const pastNg = exData.length > 0
         ? `\n\n【蓄積されたNG表現（必ず避けてください）】\n${[...new Set(exData.flatMap((e: any) => (e.items || []).filter((i: any) => i.judgment === 'NG').map((i: any) => i.expression || '')))].filter(Boolean).slice(0, 30).map((s: any) => `・${s}`).join('\n')}`
         : ''
-      const result = await callClaude(
-        `あなたはSAMURAI ARCHITECTSの編集担当AIです。${pastNg}
+      // 3企画ずつバッチ処理
+      const batchSize = 3
+      const allEditedPlans: any[] = []
+      for (let i = 0; i < plans.length; i += batchSize) {
+        const batch = plans.slice(i, i + batchSize)
+        const batchResult = await callClaude(
+          `あなたはSAMURAI ARCHITECTSの編集担当AIです。${pastNg}
 企画案に対して「この企画で使いうる表現候補」を提案してください。判定はしません。
 各表現について、なぜこの文脈で有効か・避けるべきかの理由を必ず書いてください。
 ルール：
@@ -393,9 +398,11 @@ ${knowledge.competitive}` : ''}`
 - 変革・進化・可能性を前向きに表現する
 - 加藤CEO個人の言葉として自然な表現にする
 JSONのみ返してください：{"editedPlans":[{"title":"","target":"","angle":"","point":"","expressions":[{"text":"表現候補","reason":"この表現を提案する理由・文脈（必須）"}],"okExpressions":[],"ngExpressions":[],"direction":"執筆方針（1〜2文）"}]}`,
-        `以下の企画案を編集チェックしてください：\n${JSON.stringify(plans, null, 2)}`
-      )
-      const plansWithJudgment = result.editedPlans.map((p: any) => ({
+          JSON.stringify(batch)
+        )
+        allEditedPlans.push(...(batchResult.editedPlans || []))
+      }
+      const plansWithJudgment = allEditedPlans.map((p: any) => ({
         ...p,
         expressions: (p.expressions || []).map((ex: any) => ({
           text: typeof ex === 'string' ? ex : ex.text,
@@ -406,7 +413,7 @@ JSONのみ返してください：{"editedPlans":[{"title":"","target":"","angle
         ngExpressions: p.ngExpressions || []
       }))
       setEditedPlans(plansWithJudgment)
-      await saveExpressions(result.editedPlans)
+      await saveExpressions(allEditedPlans)
     } catch (e) {
       setError('編集チェックに失敗しました。'); setStep('planning')
     } finally {
