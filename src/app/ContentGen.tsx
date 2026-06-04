@@ -472,6 +472,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
       setResults(finalResults)
       setStep('done')
       setSelectedResult(0)
+      setWritingTab(writingMode === 'note' ? 'note' : 'x')
       await saveToHistory(editedPlans, new Date().toLocaleDateString('ja-JP'))
       await saveWritings(finalResults)
     } catch (e) {
@@ -771,7 +772,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                     </button>
                   ))}
                 </div>
-                {writingTab === 'x' && (
+                {writingTab === 'x' && writingMode !== 'note' && (
                   <>
                     <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 10 }}>𝕏 投稿文（3パターン）</div>
                     {r.content.xPosts.map((post, i) => (
@@ -783,7 +784,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                     ))}
                   </>
                 )}
-                {writingTab === 'note' && (
+                {writingTab === 'note' && writingMode !== 'x' && (
                   <div style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: '24px 28px', position: 'relative' as const }}>
                     <button onClick={() => navigator.clipboard.writeText(`${r.content.noteTitle}\n\n${r.content.noteBody}`)} style={{ position: 'absolute' as const, top: 12, right: 12, fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'var(--paper)', cursor: 'pointer', fontFamily: 'inherit' }}>コピー</button>
                     <h1 style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.5, marginBottom: 20, paddingRight: 60 }}>{r.content.noteTitle}</h1>
