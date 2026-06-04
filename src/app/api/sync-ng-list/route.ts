@@ -14,11 +14,9 @@ export async function POST() {
     const expressions: any[] = (await redis.get('samurai:content-expressions') as any[]) || []
 
     const items: any[] = []
-    // 今日の日付のエントリのみ同期
-    const today = new Date().toLocaleDateString('ja-JP')
-    const latestSession = expressions.filter((e: any) => e.date === today)
-    // 今日のデータがなければ最新3件
-    const targetSession = latestSession.length > 0 ? latestSession : expressions.slice(0, 3)
+    // 最新の保存日時のエントリのみ同期
+    const latestDate = expressions[0]?.date || ''
+    const targetSession = expressions.filter((e: any) => e.date === latestDate)
     targetSession.forEach((e: any) => {
       const date = e.date || e.createdAt?.slice(0, 10) || ''
       const theme = e.theme || ''
