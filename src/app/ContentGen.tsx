@@ -52,6 +52,7 @@ export default function ContentGen() {
   const [results, setResults] = useState<FinalResult[]>([])
   const [selectedResult, setSelectedResult] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [planCount, setPlanCount] = useState(3)
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const [history, setHistory] = useState<any[]>([])
@@ -351,7 +352,7 @@ ${inputText.slice(0, 3000)}`
 NG表現が企画タイトル・切り口・核心に含まれていないことを必ず確認してください。
 特定の企業名・顧客名・個人名は企画に使わないこと。業界・市場・ターゲット層として抽象化すること。
 JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心"}]}`,
-        `以下の情報から発信企画を3つ考えてください。${pastPlans}
+        `以下の情報から発信企画を${planCount}つ考えてください。${pastPlans}
 
 【今回の入力資料】
 ${text.slice(0, 3000)}
