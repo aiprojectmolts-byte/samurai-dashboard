@@ -1,4 +1,5 @@
 'use client'
+import ReactMarkdown from 'react-markdown'
 import { useState, useRef } from 'react'
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx'
 import { saveAs } from 'file-saver'
@@ -757,8 +758,18 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>構成</div>
                     <div style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 10, marginBottom: 10, fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap' as const }}>{r.content.noteOutline}</div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>本文</div>
-                    <div style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 12, fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap' as const, position: 'relative' as const }}>
-                      {r.content.noteBody}
+                    <div style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 12, fontSize: 12, lineHeight: 1.8, position: 'relative' as const }}>
+                      <div style={{ paddingRight: 60 }}>
+                        <ReactMarkdown components={{
+                          h1: ({children}) => <h1 style={{ fontSize: 18, fontWeight: 700, margin: '12px 0 8px' }}>{children}</h1>,
+                          h2: ({children}) => <h2 style={{ fontSize: 15, fontWeight: 700, margin: '10px 0 6px' }}>{children}</h2>,
+                          h3: ({children}) => <h3 style={{ fontSize: 13, fontWeight: 700, margin: '8px 0 4px' }}>{children}</h3>,
+                          p: ({children}) => <p style={{ margin: '0 0 8px', lineHeight: 1.8 }}>{children}</p>,
+                          strong: ({children}) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
+                          ul: ({children}) => <ul style={{ paddingLeft: 20, margin: '4px 0 8px' }}>{children}</ul>,
+                          li: ({children}) => <li style={{ marginBottom: 4, lineHeight: 1.7 }}>{children}</li>,
+                        }}>{r.content.noteBody}</ReactMarkdown>
+                      </div>
                       <button onClick={() => navigator.clipboard.writeText(r.content.noteBody)} style={{ position: 'absolute' as const, top: 10, right: 10, fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'var(--paper)', cursor: 'pointer', fontFamily: 'inherit' }}>コピー</button>
                     </div>
                   </>
