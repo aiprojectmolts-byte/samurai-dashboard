@@ -54,6 +54,7 @@ export default function ContentGen() {
   const [loading, setLoading] = useState(false)
   const [planCount, setPlanCount] = useState(3)
   const [selectedPlanIndices, setSelectedPlanIndices] = useState<Set<number>>(new Set())
+  const [selectedHistoryPlans, setSelectedHistoryPlans] = useState<any[]>([])
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const [history, setHistory] = useState<any[]>([])
@@ -490,12 +491,22 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                   <div style={{ fontSize: 11, fontWeight: 600 }}>{h.date}</div>
                   <div style={{ fontSize: 10, color: 'var(--muted)' }}>{h.fileNames?.join(', ')}</div>
                 </div>
-                {h.plans?.map((p: any, j: number) => (
-                  <div key={j} style={{ background: 'var(--bg)', borderRadius: 4, padding: '6px 10px', marginBottom: 6, fontSize: 12 }}>
-                    <span style={{ fontWeight: 600 }}>{p.title}</span>
-                    <span style={{ color: 'var(--muted)', marginLeft: 8 }}>{p.target}</span>
-                  </div>
-                ))}
+                {h.plans?.map((p: any, j: number) => {
+                  const key = `${i}-${j}`
+                  const isSelected = selectedHistoryPlans.some(s => s._key === key)
+                  return (
+                    <div key={j} onClick={() => setSelectedHistoryPlans(prev => isSelected ? prev.filter(s => s._key !== key) : [...prev, { ...p, _key: key }])}
+                      style={{ background: isSelected ? 'var(--gbg)' : 'var(--bg)', borderRadius: 4, padding: '6px 10px', marginBottom: 6, fontSize: 12, cursor: 'pointer', border: isSelected ? '1px solid var(--green)' : '1px solid transparent', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 14, height: 14, borderRadius: 3, border: '1.5px solid var(--b1)', background: isSelected ? 'var(--green)' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        {isSelected && <span style={{ color: 'white', fontSize: 9, fontWeight: 700 }}>✓</span>}
+                      </div>
+                      <div>
+                        <span style={{ fontWeight: 600 }}>{p.title}</span>
+                        <span style={{ color: 'var(--muted)', marginLeft: 8 }}>{p.target}</span>
+                      </div>
+                    </div>
+                  )
+                })}
                 <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                   <button onClick={() => exportPDF(`企画_${h.date}`, (h.plans || []).map((p: any) => ({ heading: p.title, body: `想定読者: ${p.target}\n切り口: ${p.angle}\n核心: ${p.point}` })))} style={{ fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📄 PDF</button>
                   <button onClick={() => exportWord(`企画_${h.date}`, (h.plans || []).map((p: any) => ({ heading: p.title, body: `想定読者: ${p.target}\n切り口: ${p.angle}\n核心: ${p.point}${p.direction ? '\n執筆方針: ' + p.direction : ''}` })))} style={{ fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📝 Word</button>
@@ -503,6 +514,15 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {showHistory && selectedHistoryPlans.length > 0 && (
+        <div style={{ position: 'sticky', bottom: 0, padding: '12px 0', background: 'var(--bg)' }}>
+          <button onClick={() => { setPlans(selectedHistoryPlans.map(({_key, ...p}) => p)); setSelectedPlanIndices(new Set(selectedHistoryPlans.map((_, i) => i))); setShowHistory(false); setStep('planning') }}
+            style={{ width: '100%', padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            ✍️ 選択した{selectedHistoryPlans.length}件を編集に渡す
+          </button>
         </div>
       )}
 
