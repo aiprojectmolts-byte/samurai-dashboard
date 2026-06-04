@@ -142,6 +142,21 @@ ${text.slice(0, 8000)}`
         await fetch('/api/questions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newList) })
       }
 
+      // ナレッジにも自動保存
+      await fetch('/api/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: `kb_mtg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          filename: mtgName,
+          label: 'MTG議事録',
+          summary: `タスク${tasksToAdd.length}件・質問${questionsToAdd.length}件を含むMTG議事録`,
+          date: today,
+          text: text.slice(0, 10000),
+          createdAt: new Date().toISOString()
+        })
+      })
+
       setStatus('done')
     } catch (e) {
       setError('登録に失敗しました')
