@@ -222,6 +222,7 @@ ${inputText.slice(0, 3000)}`
 
   const saveExpressions = async (editedPlans: any[]) => {
     const date = new Date().toLocaleDateString('ja-JP')
+    const sessionId = `session_${Date.now()}`
     for (const p of editedPlans) {
       const items = [
         ...(p.expressions || []).map((ex: any) => ({
@@ -232,7 +233,8 @@ ${inputText.slice(0, 3000)}`
           theme: p.title || '',
           target: p.target || '',
           direction: p.direction || '',
-          date
+          date,
+          sessionId
         }))
       ]
       await fetch('/api/content-expressions', {
@@ -241,6 +243,7 @@ ${inputText.slice(0, 3000)}`
         body: JSON.stringify({
           ok: (p.okExpressions || []),
           ng: (p.ngExpressions || []),
+          sessionId,
           theme: p.title || '',
           target: p.target || '',
           direction: p.direction || '',
