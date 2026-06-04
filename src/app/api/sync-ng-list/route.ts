@@ -15,16 +15,29 @@ export async function POST() {
 
     const items: any[] = []
     expressions.forEach((e: any) => {
-      const date = e.createdAt?.slice(0, 10) || ''
+      const date = e.date || e.createdAt?.slice(0, 10) || ''
       const theme = e.theme || ''
-      ;(e.ng || []).forEach((ng: string) => items.push({ expression: ng, category: 'NG', theme, date }))
-      ;(e.ok || []).forEach((ok: string) => items.push({ expression: ok, category: 'OK', theme, date }))
+      const target = e.target || ''
+      const direction = e.direction || ''
+      if (e.items?.length > 0) {
+        e.items.forEach((item: any) => items.push({
+          expression: item.expression,
+          category: item.type || 'OK',
+          theme: item.theme || theme,
+          target: item.target || target,
+          direction: item.direction || direction,
+          date: item.date || date
+        }))
+      } else {
+        ;(e.ng || []).forEach((ng: string) => items.push({ expression: ng, category: 'NG', theme, target, direction, date }))
+        ;(e.ok || []).forEach((ok: string) => items.push({ expression: ok, category: 'OK', theme, target, direction, date }))
+      }
     })
 
     const res = await fetch(gasUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items })
+      body: JSON.stringify({ items, sheetName: 'OK_NG一覧' })
     })
     const data = await res.json()
     return NextResponse.json({ success: true, synced: items.length, result: data })

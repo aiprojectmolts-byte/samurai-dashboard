@@ -166,15 +166,42 @@ ${inputText.slice(0, 3000)}`
     setHistory(data)
   }
 
-  // OK/NG表現を保存
+  // OK/NG表現を企画単位で保存
   const saveExpressions = async (editedPlans: any[]) => {
-    const okAll = editedPlans.flatMap((p: any) => p.okExpressions || [])
-    const ngAll = editedPlans.flatMap((p: any) => p.ngExpressions || [])
-    await fetch('/api/content-expressions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: okAll, ng: ngAll, date: new Date().toLocaleDateString('ja-JP') })
-    })
+    const date = new Date().toLocaleDateString('ja-JP')
+    for (const p of editedPlans) {
+      const items = [
+        ...(p.okExpressions || []).map((ex: string) => ({
+          expression: ex,
+          type: 'OK',
+          theme: p.title || '',
+          target: p.target || '',
+          direction: p.direction || '',
+          date
+        })),
+        ...(p.ngExpressions || []).map((ex: string) => ({
+          expression: ex,
+          type: 'NG',
+          theme: p.title || '',
+          target: p.target || '',
+          direction: p.direction || '',
+          date
+        }))
+      ]
+      await fetch('/api/content-expressions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ok: (p.okExpressions || []),
+          ng: (p.ngExpressions || []),
+          theme: p.title || '',
+          target: p.target || '',
+          direction: p.direction || '',
+          date,
+          items
+        })
+      })
+    }
   }
 
   // 執筆結果を保存
