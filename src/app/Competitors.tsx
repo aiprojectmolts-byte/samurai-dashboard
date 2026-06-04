@@ -1,4 +1,5 @@
 'use client'
+import TrendsSection from './TrendsSection'
 import { useState, useEffect } from 'react'
 
 const OUR_PRODUCTS = ['Rendery', 'knock knock AI', 'VISIOAL', 'カスタムソリューション']
@@ -469,6 +470,7 @@ ${text.slice(0, 1500)}`
           )}
         </div>
       ))}
+      <TrendsSection />
     </div>
   )
 }
