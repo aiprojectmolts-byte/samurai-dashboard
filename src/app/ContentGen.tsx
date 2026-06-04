@@ -54,6 +54,7 @@ export default function ContentGen() {
   const [loading, setLoading] = useState(false)
   const [planCount, setPlanCount] = useState(3)
   const [selectedPlanIndices, setSelectedPlanIndices] = useState<Set<number>>(new Set())
+  const [writingTab, setWritingTab] = useState<'x' | 'note'>('x')
   const [selectedHistoryPlans, setSelectedHistoryPlans] = useState<any[]>([])
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -727,28 +728,41 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                   <span style={{ fontSize: 10, background: 'var(--bg)', padding: '2px 8px', borderRadius: 10, color: 'var(--ink2)' }}>切り口: {r.plan.angle}</span>
                 </div>
               </div>
-              {/* X投稿 */}
+              {/* X/note タブ切り替え */}
               <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16, marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 10 }}>𝕏 投稿文（3パターン）</div>
-                {r.content.xPosts.map((post, i) => (
-                  <div key={i} style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 12, marginBottom: 8, position: 'relative' as const }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>パターン{i+1} — {post.length}文字</div>
-                    <div style={{ fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap' as const }}>{post}</div>
-                    <button onClick={() => navigator.clipboard.writeText(post)} style={{ position: 'absolute' as const, top: 10, right: 10, fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'var(--paper)', cursor: 'pointer', fontFamily: 'inherit' }}>コピー</button>
-                  </div>
-                ))}
-              </div>
-              {/* note */}
-              <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16, marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 10 }}>note 記事</div>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>{r.content.noteTitle}</div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>構成</div>
-                <div style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 10, marginBottom: 10, fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap' as const }}>{r.content.noteOutline}</div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>本文</div>
-                <div style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 12, fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap' as const, position: 'relative' as const }}>
-                  {r.content.noteBody}
-                  <button onClick={() => navigator.clipboard.writeText(r.content.noteBody)} style={{ position: 'absolute' as const, top: 10, right: 10, fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'var(--paper)', cursor: 'pointer', fontFamily: 'inherit' }}>コピー</button>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                  {(['x', 'note'] as const).map(tab => (
+                    <button key={tab} onClick={() => setWritingTab(tab)}
+                      style={{ padding: '4px 14px', borderRadius: 20, border: '0.5px solid var(--b1)', background: writingTab === tab ? 'var(--ink)' : 'none', color: writingTab === tab ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 600 }}>
+                      {tab === 'x' ? '𝕏 X投稿' : '📝 note'}
+                    </button>
+                  ))}
                 </div>
+                {writingTab === 'x' && (
+                  <>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 10 }}>𝕏 投稿文（3パターン）</div>
+                    {r.content.xPosts.map((post, i) => (
+                      <div key={i} style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 12, marginBottom: 8, position: 'relative' as const }}>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>パターン{i+1} — {post.length}文字</div>
+                        <div style={{ fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap' as const }}>{post}</div>
+                        <button onClick={() => navigator.clipboard.writeText(post)} style={{ position: 'absolute' as const, top: 10, right: 10, fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'var(--paper)', cursor: 'pointer', fontFamily: 'inherit' }}>コピー</button>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {writingTab === 'note' && (
+                  <>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 10 }}>note 記事</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>{r.content.noteTitle}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>構成</div>
+                    <div style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 10, marginBottom: 10, fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap' as const }}>{r.content.noteOutline}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>本文</div>
+                    <div style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 12, fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap' as const, position: 'relative' as const }}>
+                      {r.content.noteBody}
+                      <button onClick={() => navigator.clipboard.writeText(r.content.noteBody)} style={{ position: 'absolute' as const, top: 10, right: 10, fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'var(--paper)', cursor: 'pointer', fontFamily: 'inherit' }}>コピー</button>
+                    </div>
+                  </>
+                )}
               </div>
               {/* OK/NG */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
