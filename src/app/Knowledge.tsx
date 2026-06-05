@@ -23,6 +23,7 @@ export default function Knowledge() {
   const [dragging, setDragging] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [pasteName, setPasteName] = useState('')
+  const [decomposing, setDecomposing] = useState(false)
   const [pasting, setPasting] = useState(false)
   const [editingId, setEditingId] = useState<string|null>(null)
   const [editItem, setEditItem] = useState<any>(null)
@@ -105,6 +106,32 @@ ${text.slice(0, 3000)}`
     }
     await fetchItems()
     setUploading(false)
+  }
+
+  const decomposeAndImport = async () => {
+    if (!pasteText.trim()) return
+    setDecomposing(true)
+    try {
+      const title = pasteName.trim() || `ソース_${new Date().toLocaleDateString('ja-JP')}`
+      const res = await fetch('/api/decompose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: pasteText, sourceTitle: title })
+      })
+      const data = await res.json()
+      if (data.success) {
+        alert(`✅ ${data.added}件のエントリを投入しました\n\nカテゴリ:\n${data.categories.join('\n')}`)
+        setPasteText('')
+        setPasteName('')
+        fetchItems()
+      } else {
+        alert('分解に失敗しました: ' + data.error)
+      }
+    } catch (e) {
+      alert('エラーが発生しました')
+    } finally {
+      setDecomposing(false)
+    }
   }
 
   const uploadText = async () => {
@@ -237,11 +264,18 @@ ${pasteText.slice(0, 3000)}`
           placeholder="NotebookLMの出力やテキストを貼り付けてください..."
           style={{ width: '100%', padding: '8px 10px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', fontSize: 12, fontFamily: 'inherit', background: 'var(--bg)', minHeight: 100, resize: 'vertical' as const, boxSizing: 'border-box' as const, marginBottom: 8 }}
         />
-        <button
-          onClick={uploadText}
-          disabled={pasting || !pasteText.trim()}
-          style={{ padding: '6px 16px', background: pasteText.trim() ? 'var(--ink)' : 'var(--b1)', color: pasteText.trim() ? '#fff' : 'var(--muted)', border: 'none', borderRadius: 'var(--r)', fontSize: 12, fontWeight: 600, cursor: pasteText.trim() ? 'pointer' : 'default', fontFamily: 'inherit' }}
-        >{pasting ? '登録中...' : '登録する'}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={uploadText}
+            disabled={pasting || !pasteText.trim()}
+            style={{ padding: '6px 16px', background: pasteText.trim() ? 'var(--ink)' : 'var(--b1)', color: pasteText.trim() ? '#fff' : 'var(--muted)', border: 'none', borderRadius: 'var(--r)', fontSize: 12, fontWeight: 600, cursor: pasteText.trim() ? 'pointer' : 'default', fontFamily: 'inherit' }}
+          >{pasting ? '登録中...' : '登録する'}</button>
+          <button
+            onClick={decomposeAndImport}
+            disabled={decomposing || !pasteText.trim()}
+            style={{ padding: '6px 16px', background: pasteText.trim() ? '#2563eb' : 'var(--b1)', color: pasteText.trim() ? '#fff' : 'var(--muted)', border: 'none', borderRadius: 'var(--r)', fontSize: 12, fontWeight: 600, cursor: pasteText.trim() ? 'pointer' : 'default', fontFamily: 'inherit' }}
+          >{decomposing ? '分解中...' : '🔍 分解して投入'}</button>
+        </div>
       </div>
 
       {/* 検索＆フィルター */}
