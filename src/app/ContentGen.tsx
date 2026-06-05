@@ -349,7 +349,7 @@ ${inputText.slice(0, 3000)}`
     // テキストは任意（ナレッジがあれば空でも動く）
     setError(''); setLoading(true); setStep('planning')
     try {
-      saveToKnowledge(text, fileNames)
+      if (text.trim()) saveToKnowledge(text, fileNames)
       await fetchHistory()
       const knowledge = await fetchKnowledgeByLabel()
       // 蓄積されたNG表現を取得
