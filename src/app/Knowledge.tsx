@@ -177,7 +177,7 @@ ${pasteText.slice(0, 3000)}`
 
   const filtered = items.filter(i => {
     const matchLabel = !filterLabel || i.label === filterLabel
-    const matchSearch = !search || i.filename.includes(search) || i.summary.includes(search) || i.label.includes(search)
+    const matchSearch = !search || (i.title || '').includes(search) || i.filename.includes(search) || i.summary.includes(search) || i.label.includes(search)
     return matchLabel && matchSearch
   })
 
@@ -278,7 +278,7 @@ ${pasteText.slice(0, 3000)}`
                   <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: labelBg[item.label] || 'var(--bg)', color: labelColor[item.label] || 'var(--muted)' }}>{item.label}</span>
                   {item.date && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{item.date}</span>}
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{item.filename}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{item.title || item.filename}</div>
                 {item.summary && <div style={{ fontSize: 11, color: 'var(--ink2)', lineHeight: 1.6 }}>{item.summary}</div>}
               </div>
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
