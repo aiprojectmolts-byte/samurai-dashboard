@@ -3,16 +3,56 @@ import { useState, useRef, useEffect } from 'react'
 
 const LABELS = ['MTG議事録', '商談ログ', '提案書', '参考資料', '会社情報', 'その他']
 
-const PROMPT_KNOWLEDGE = `このドキュメントを以下の形式でまとめてください。
-・日付（わかれば）
-・文書の種類（MTG議事録/提案書/参考資料など）
-・主要なトピック（3〜5個）
-・重要な決定事項や結論
-・キーワード（10個程度）
-・全体の要約（200字程度）`
+const PROMPT_MTG = `以下のMTG・逐語録を読んで、各カテゴリに該当する箇所を抽出してください。
+該当なしのカテゴリは出力不要です。発言はできるだけ原文のまま引用してください。
 
-const PROMPT_GENERAL = `このドキュメントの要点を構造化してまとめてください。
-日付・種類・概要・重要ポイント・キーワードを含めてください。`
+## 加藤CEOペルソナ
+加藤CEOが思想・比喩・ビジョンを語っている発言を抽出
+
+## 商談ログ
+顧客・見込み客の課題・反応・ニーズが出ている箇所を抽出
+
+## 競合情報
+競合他社・競合サービスへの言及を抽出
+
+## 業界インサイト
+業界全体の動向・数字・トレンドを抽出
+
+## 施策・アクション
+今後の打ち手・決定事項・ネクストアクションを抽出
+
+## 顧客事例
+具体的な導入事例・成果・活用シーンを抽出
+
+各カテゴリのタイトル（##）の後に内容を記載してください。`
+
+const PROMPT_DOCUMENT = `以下の資料・スライドを読んで、各カテゴリに該当する内容を抽出してください。
+該当なしのカテゴリは出力不要です。
+
+## 自社背景
+自社プロダクト・サービス・実績・強みに関する情報を抽出
+
+## 競合情報
+競合他社・競合サービスの情報・比較を抽出
+
+## 業界インサイト
+業界全体の動向・市場データ・数字を抽出
+
+## 顧客事例
+具体的な導入事例・成果・活用シーンを抽出
+
+各カテゴリのタイトル（##）の後に内容を記載してください。`
+
+const PROMPT_NEWS = `以下の記事・ニュースを読んで、以下の形式で要約してください。
+
+## 業界インサイト
+この記事から読み取れる業界動向・トレンド・数字を箇条書きで抽出
+
+## 競合情報
+競合他社・競合サービスに関する情報があれば抽出（なければ省略）
+
+各カテゴリのタイトル（##）の後に内容を記載してください。`
+
 
 export default function Knowledge() {
   const [items, setItems] = useState<any[]>([])
@@ -24,6 +64,7 @@ export default function Knowledge() {
   const [pasteText, setPasteText] = useState('')
   const [pasteName, setPasteName] = useState('')
   const [decomposing, setDecomposing] = useState(false)
+  const [sourceType, setSourceType] = useState<'mtg' | 'document' | 'news'>('mtg')
   const [pasting, setPasting] = useState(false)
   const [editingId, setEditingId] = useState<string|null>(null)
   const [editItem, setEditItem] = useState<any>(null)
@@ -116,7 +157,7 @@ ${text.slice(0, 3000)}`
       const res = await fetch('/api/decompose', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: pasteText, sourceTitle: title })
+        body: JSON.stringify({ text: pasteText, sourceTitle: title, sourceType })
       })
       const data = await res.json()
       if (data.success) {
@@ -244,9 +285,22 @@ ${pasteText.slice(0, 3000)}`
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-        <button onClick={() => { navigator.clipboard.writeText(PROMPT_KNOWLEDGE); alert('コピーしました') }} style={{ fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>📋 NotebookLM用（ナレッジ登録）</button>
-        <button onClick={() => { navigator.clipboard.writeText(PROMPT_GENERAL); alert('コピーしました') }} style={{ fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>📋 汎用プロンプト</button>
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>ソースの種類</div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          {([['mtg', '🎤 MTG・逐語録'], ['document', '📄 資料・スライド'], ['news', '📰 記事・ニュース']] as const).map(([val, label]) => (
+            <button key={val} onClick={() => setSourceType(val)}
+              style={{ padding: '4px 12px', borderRadius: 20, border: '0.5px solid var(--b1)', background: sourceType === val ? 'var(--ink)' : 'none', color: sourceType === val ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => { const p = sourceType === 'mtg' ? PROMPT_MTG : sourceType === 'document' ? PROMPT_DOCUMENT : PROMPT_NEWS; navigator.clipboard.writeText(p); alert('コピーしました') }}
+            style={{ fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>
+            📋 NotebookLM用プロンプトをコピー
+          </button>
+        </div>
       </div>
 
       {/* テキスト貼り付け */}
