@@ -57,6 +57,7 @@ export default function ContentGen() {
   const [selectedPlanIndices, setSelectedPlanIndices] = useState<Set<number>>(new Set())
   const [writingTab, setWritingTab] = useState<'x' | 'note'>('x')
   const [writingMode, setWritingMode] = useState<'both' | 'x' | 'note'>('both')
+  const [publishTarget, setPublishTarget] = useState<'kato_note' | 'company_x' | 'both'>('kato_note')
   const [selectedHistoryPlans, setSelectedHistoryPlans] = useState<any[]>([])
   const [error, setError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -350,18 +351,39 @@ ${inputText.slice(0, 3000)}`
         ? `\n\n【過去の企画履歴（被りを避けてください）】\n${history.flatMap((h: any) => h.plans || []).map((p: any) => `・${p.title}`).join('\n')}`
         : ''
       const result = await callClaude(
-        `あなたはSAMURAI ARCHITECTSの企画担当AIです。
-渡された資料・データから「加藤CEOが外部発信すべきテーマ」を抽出します。
-建築×AIの文脈で業界に価値を届けられる企画を考えてください。${pastNgForPlanning}
+`あなたはSAMURAI ARCHITECTSの企画担当AIです。
+渡された資料・データから外部発信すべきテーマを抽出します。${pastNgForPlanning}
+
+【加藤CEOの発信テーマ軸（必ず反映すること）】
+- 建築業界はまだ「ポケベル」の時代。ガラケーからスマホへの切り替え期にある
+- バックキャスト設計：イメージ→図面→建材という逆算型の設計プロセスへの移行
+- 中小工務店・設計事務所の「味方になりたい」。家業が建設業で、そこへの課題感から起業
+- システムだけでは業界は変わらない。ワークフロー・人材育成・ブランディングまで含めた伴走が必要
+- 空間デザインの民主化：専門家でなくても高品質な設計提案ができる世界を作る
+- カタチ（建築）× 施策（経営）の二項融合。ハードとソフト、両方の視点を持つ
+- 変革の受け入れは半分程度。「どっちの意見も分かる」という姿勢で語る
+
+【発信媒体：${publishTarget === 'kato_note' ? '加藤CEO個人note' : publishTarget === 'company_x' ? '会社公式X' : '加藤CEO個人note + 会社公式X'}】
+${publishTarget === 'kato_note' ? `
+→ 加藤CEO個人の思想・原体験・比喩を前面に出す企画
+→ 会社の実績・数値は「根拠」として使う
+→ 「なぜ自分がこれをやっているのか」という一人称の文脈を必ず組み込む
+→ 読者：業界に問題意識を持つ建築家・工務店経営者・DX担当者` : publishTarget === 'company_x' ? `
+→ 会社としての実績・数値・事例を中心にした企画
+→ 短く刺さるトピック・業界インサイトが中心
+→ 加藤CEOらしい視点（比喩・現場感）で締める
+→ 読者：建築DXに関心のある業界関係者` : `
+→ 加藤CEO個人noteと会社Xの両方で使える企画
+→ 個人の思想と会社の実績を両方組み込む`}
 
 以下の3層の情報を統合して企画を作ってください：
 1. 現場の生の声（商談・MTG）→ 差別化の核心になる
 2. 自社の背景・強み → 文脈と信頼性
 3. 競合情報 → 差別化ポイント
 
-「現場で語られた課題 × 自社の強み × 競合との差」が交差する企画が最も価値が高いです。
+「現場で語られた課題 × 自社の強み × 競合との差 × 加藤CEOの発信テーマ軸」が交差する企画が最も価値が高いです。
 NG表現が企画タイトル・切り口・核心に含まれていないことを必ず確認してください。
-特定の企業名・顧客名・個人名は企画に使わないこと。業界・市場・ターゲット層として抽象化すること。
+特定の企業名・顧客名・個人名は使わないこと。業界・市場・ターゲット層として抽象化すること。
 JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心"}]}`,
         `以下の情報から発信企画を${planCount}つ考えてください。${pastPlans}
 
@@ -611,6 +633,17 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>またはテキストを直接貼り付け</label>
           <textarea value={text} onChange={e => setText(e.target.value)} placeholder="追加情報があれば貼り付けてください（任意）。ナレッジベースの情報から企画を生成します。" style={{ ...inp, minHeight: 140, resize: 'vertical' as const }} />
           {error && <div style={{ color: 'var(--red)', fontSize: 12, margin: '8px 0' }}>{error}</div>}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>発信媒体</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {([['kato_note', '✍️ 加藤CEO個人note'], ['company_x', '𝕏 会社公式X'], ['both', '両方']] as const).map(([val, label]) => (
+                <button key={val} onClick={() => setPublishTarget(val as any)}
+                  style={{ padding: '4px 12px', borderRadius: 20, border: '0.5px solid var(--b1)', background: publishTarget === val ? 'var(--ink)' : 'none', color: publishTarget === val ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 12, color: 'var(--ink2)' }}>企画数</span>
             <input type="number" min={1} max={10} value={planCount}
