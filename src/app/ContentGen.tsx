@@ -142,7 +142,19 @@ export default function ContentGen() {
         .map((k: any) => `【${k.filename}】${k.summary || k.text?.slice(0, 200) || ''}`)
         .join('\n')
 
-      return { voices, background, competitive }
+      const persona = data
+        .filter((k: any) => k.label === '加藤CEOペルソナ')
+        .slice(0, 3)
+        .map((k: any) => `${k.title || ''}: ${k.summary || k.text?.slice(0, 500) || ''}`)
+        .join('\n\n')
+
+      const companyBackground = data
+        .filter((k: any) => ['参考資料', '会社情報', '自社背景'].includes(k.label))
+        .slice(0, 5)
+        .map((k: any) => `【${k.title || k.filename}】${k.summary || k.text?.slice(0, 200) || ''}`)
+        .join('\n')
+
+      return { voices, background: companyBackground || background, competitive, persona }
     } catch {
       return { voices: '', background: '', competitive: '' }
     }
@@ -395,6 +407,9 @@ ${knowledge.voices}` : ''}
 
 ${knowledge.background ? `【自社背景・参考資料】
 ${knowledge.background}` : ''}
+
+${knowledge.persona ? `【加藤CEOの発信ペルソナ・実績】
+${knowledge.persona}` : ''}
 
 ${knowledge.competitive ? `【競合情報】
 ${knowledge.competitive}` : ''}`
