@@ -279,6 +279,11 @@ ${pasteText.slice(0, 3000)}`
                   {item.date && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{item.date}</span>}
                 </div>
                 <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>{item.title || item.filename}</div>
+                {(item.summary || item.content) && (
+                  <div style={{ fontSize: 11, color: 'var(--ink2)', lineHeight: 1.6, marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
+                    {(item.summary || item.content || '').slice(0, 120)}...
+                  </div>
+                )}
                 {item.summary && <div style={{ fontSize: 11, color: 'var(--ink2)', lineHeight: 1.6 }}>{item.summary}</div>}
               </div>
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
