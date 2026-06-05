@@ -83,13 +83,21 @@ export default function ContentGen() {
   }
 
   // PDF出力
+  const mdToHtml = (text: string) => text
+    .replace(/^## (.+)$/gm, '<h2 style="font-size:16px;font-weight:700;margin:20px 0 8px;border-bottom:1px solid #eee;padding-bottom:4px">$1</h2>')
+    .replace(/^### (.+)$/gm, '<h3 style="font-size:14px;font-weight:700;margin:14px 0 6px">$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^- (.+)$/gm, '<li style="margin:3px 0 3px 20px;line-height:1.7">$1</li>')
+    .replace(/\n\n/g, '</p><p style="margin:10px 0">')
+    .replace(/\n/g, '<br/>')
+
   const exportPDF = (title: string, sections: {heading: string, body: string}[]) => {
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
     const html = sections.map(s =>
-      `<h2>${s.heading}</h2><p style="white-space:pre-wrap">${s.body}</p>`
-    ).join('<hr>')
-    printWindow.document.write(`<html><head><title>${title}</title><style>body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;padding:32px;font-size:13px;line-height:1.8;max-width:800px;margin:0 auto}h1{font-size:22px;margin-bottom:24px;border-bottom:2px solid #333;padding-bottom:8px}h2{font-size:15px;margin-top:24px;margin-bottom:8px;color:#333}p{margin:4px 0;color:#444}hr{border:none;border-top:1px solid #eee;margin:20px 0}@media print{body{padding:16px}}</style></head><body><h1>${title}</h1>${html}</body></html>`)
+      `<h2 style="font-size:15px;font-weight:700;margin:28px 0 10px;color:#111;border-bottom:1px solid #ddd;padding-bottom:6px">${s.heading}</h2><div style="font-size:13px;line-height:1.9;color:#333"><p style="margin:10px 0">${mdToHtml(s.body)}</p></div>`
+    ).join('<hr style="border:none;border-top:1px solid #eee;margin:24px 0">')
+    printWindow.document.write(`<html><head><title>${title}</title><style>body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;padding:40px;font-size:13px;line-height:1.8;max-width:800px;margin:0 auto}h1{font-size:22px;font-weight:700;margin-bottom:28px;border-bottom:2px solid #333;padding-bottom:10px}@media print{body{padding:20px}}</style></head><body><h1>${title}</h1>${html}</body></html>`)
     printWindow.document.close()
     setTimeout(() => printWindow.print(), 300)
   }
