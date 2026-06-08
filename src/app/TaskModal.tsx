@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { CSSProperties } from 'react'
 
 type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
@@ -30,6 +30,17 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
 
   const set = <K extends keyof Task>(k: K, v: Task[K]) => setForm(f => ({ ...f, [k]: v }))
 
+  const [categories, setCategories] = useState<string[]>([])
+  useEffect(() => {
+    fetch('/api/categories')
+      .then(r => r.json())
+      .then((data: { id: string; name: string }[]) => { if (Array.isArray(data)) setCategories(data.map(c => c.name)) })
+      .catch(() => {})
+  }, [])
+
+  // 「未分類」を先頭に。既存タスクの施策値が一覧に無い場合も選択肢に含めて後方互換を保つ
+  const categoryOptions = Array.from(new Set(['未分類', ...categories, form.施策].filter(Boolean)))
+
   const assigneeList = form.own === 'molts' ? members.molts
     : form.own === 'samurai' ? members.samurai
     : [...members.molts, ...members.samurai]
@@ -51,7 +62,7 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
           <label style={lbl}>
             施策
             <select value={form.施策} onChange={e => set('施策', e.target.value)} style={inp}>
-              {['施策1','施策2','施策3','施策4','施策5','施策6','施策7'].map(s => <option key={s} value={s}>{s}</option>)}
+              {categoryOptions.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </label>
 

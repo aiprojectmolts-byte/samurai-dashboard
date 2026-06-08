@@ -10,6 +10,7 @@ import MtgImport from './MtgImport'
 import ContentGen from './ContentGen'
 import Knowledge from './Knowledge'
 import Competitors from './Competitors'
+import CategorySettings from './CategorySettings'
 
 import { useState, useEffect } from 'react'
 
@@ -252,6 +253,7 @@ export default function Dashboard() {
           <div className="sb-div" />
           <div className="sb-grp">設定</div>
           <div className={`ni${view === 'settings' ? ' on' : ''}`} onClick={() => setView('settings')}>データ連携</div>
+          <div className={`ni${view === 'category-settings' ? ' on' : ''}`} onClick={() => setView('category-settings')}>カテゴリ管理</div>
           <div className={`ni${view === 'mtg-import' ? ' on' : ''}
             {view === 'members' ? ' on' : ''}`} onClick={() => setView('members')}>メンバー管理</div>
           <div className={`ni${view === 'slack' ? ' on' : ''}`} onClick={() => setView('slack')}>コミュニケーションログ</div>
@@ -441,6 +443,7 @@ export default function Dashboard() {
             {view === 'content-gen' && <ContentGen />}
             {view === 'knowledge' && <Knowledge />}
             {view === 'competitors' && <Competitors />}
+            {view === 'category-settings' && <CategorySettings />}
             {view === 'members' && (
               <div>
                 <div className="pg-title">メンバー管理</div>
