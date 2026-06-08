@@ -345,6 +345,47 @@ ${inputText.slice(0, 3000)}`
     return JSON.parse(raw.replace(/```json|```/g, '').trim())
   }
 
+  // ナレッジ内の固有名詞を一般表現に置き換える。失敗時は元テキストをそのまま返す。
+  const sanitizeKnowledge = async (text: string): Promise<string> => {
+    if (!text || !text.trim()) return text
+    try {
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 4000,
+          messages: [{
+            role: 'user',
+            content: `以下のテキストから、具体的な固有名詞を一般的な表現に置き換えてください。
+
+置き換えの対象：
+・企業名・クライアント名 → 「あるクライアント企業」「大手デベロッパー」「中小工務店の一社」など文脈に合った一般表現
+・競合プロダクト名・サービス名 → 「類似の競合プロダクト」「他社のAIツール」など
+・個人名 → 「担当者」「先方の責任者」など
+
+置き換えてはいけないもの：
+・SAMURAI ARCHITECTS・Rendery・knock knock AIなどSAMURAI自身のプロダクト名
+・数値・パーセンテージ・期間などの具体的なデータ
+・業界名・職種名・一般的な技術用語
+
+内容・インサイト・文脈はそのまま保持すること。
+テキストが空の場合はそのまま返すこと。
+変換後のテキストのみ返すこと。前置き・説明は不要。
+
+テキスト：
+${text}`
+          }]
+        })
+      })
+      const data = await res.json()
+      const out = data.content?.find((c: any) => c.type === 'text')?.text || ''
+      return out.trim() || text
+    } catch {
+      return text
+    }
+  }
+
   const readFiles = async (files: File[]) => {
     if (files.length === 0) return
     const oversized = files.filter(f => f.size > 4 * 1024 * 1024)
@@ -375,6 +416,13 @@ ${inputText.slice(0, 3000)}`
       if (text.trim()) saveToKnowledge(text, fileNames)
       await fetchHistory()
       const knowledge = await fetchKnowledgeByLabel()
+      // 固有名詞のサニタイズ（voices・competitiveのみ。空なら実行しない）
+      const sanitizedVoices = knowledge.voices
+        ? await sanitizeKnowledge(knowledge.voices)
+        : ''
+      const sanitizedCompetitive = knowledge.competitive
+        ? await sanitizeKnowledge(knowledge.competitive)
+        : ''
       // 蓄積されたNG表現を取得
       const exRes2 = await fetch('/api/content-expressions')
       const exData2 = await exRes2.json()
@@ -470,8 +518,8 @@ JSONのみ返してください：{"plans":[{"title":"企画タイトル","targe
 【今回の入力資料】
 ${text.slice(0, 3000)}
 
-${knowledge.voices ? `【現場の生の声（商談・MTG議事録）】
-${knowledge.voices}` : ''}
+${sanitizedVoices ? `【現場の生の声（商談・MTG議事録）】
+${sanitizedVoices}` : ''}
 
 ${knowledge.background ? `【自社背景・参考資料】
 ${knowledge.background}` : ''}
@@ -479,8 +527,8 @@ ${knowledge.background}` : ''}
 ${knowledge.persona ? `【加藤CEOの発信ペルソナ・実績】
 ${knowledge.persona}` : ''}
 
-${knowledge.competitive ? `【競合情報】
-${knowledge.competitive}` : ''}`
+${sanitizedCompetitive ? `【競合情報】
+${sanitizedCompetitive}` : ''}`
       )
       setPlans(result.plans)
     } catch (e) {
