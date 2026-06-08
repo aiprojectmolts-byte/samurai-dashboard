@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react'
 type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
 
 interface Task {
+  id?: string
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
   assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string
@@ -23,6 +24,7 @@ interface Props {
 export default function TaskModal({ task, members, onSave, onDelete, onClose }: Props) {
   const isNew = task === null
   const [form, setForm] = useState<Task>(task ?? {
+    id: Date.now().toString() + Math.random().toString(36).slice(2),
     施策: '施策1', name: '', s: new Date().toISOString().slice(0, 10),
     e: new Date().toISOString().slice(0, 10), own: 'molts', st: 'todo', chg: false,
     assignee: '', blocker: false, impact: '', src: 'manual',

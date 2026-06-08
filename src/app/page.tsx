@@ -17,6 +17,7 @@ import { useState, useEffect } from 'react'
 type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
 
 interface Task {
+  id?: string
   施策: string
   name: string
   s: string
@@ -115,9 +116,9 @@ export default function Dashboard() {
     } catch {}
   }
 
-  const bulkUpdateStatus = async (names: string[], st: TaskStatus) => {
-    const nameSet = new Set(names)
-    const updated = tasks.map(t => nameSet.has(t.name) ? { ...t, st } : t)
+  const bulkUpdateStatus = async (ids: string[], st: TaskStatus) => {
+    const idSet = new Set(ids)
+    const updated = tasks.map(t => idSet.has(t.id ?? t.name) ? { ...t, st } : t)
     setTasks(updated)
     setSaving(true)
     try {

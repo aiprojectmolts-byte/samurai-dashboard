@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
 interface Task {
+  id?: string
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
   assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string
@@ -101,9 +102,11 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
   const doing = tasks.filter(t => t.st === 'doing').length
   const done = tasks.filter(t => t.st === 'done').length
 
-  const toggleSel = (name: string) => setSelected(s => {
+  // 選択は id ベースで管理（id 未設定の旧データは name にフォールバック）
+  const keyOf = (t: Task) => t.id ?? t.name
+  const toggleSel = (key: string) => setSelected(s => {
     const n = new Set(s)
-    if (n.has(name)) n.delete(name); else n.add(name)
+    if (n.has(key)) n.delete(key); else n.add(key)
     return n
   })
   const clearSel = () => setSelected(new Set())
@@ -117,8 +120,8 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
     const due = t.e ? dueInfo(t.e) : null
     const idx = tasks.indexOf(t)
     return (
-      <div key={t.name} className="ir" style={{ opacity: t.st === 'done' ? 0.4 : 1 }}>
-        <input type="checkbox" checked={selected.has(t.name)} onChange={() => toggleSel(t.name)} style={{ marginTop: 3, cursor: 'pointer', flexShrink: 0 }} />
+      <div key={keyOf(t)} className="ir" style={{ opacity: t.st === 'done' ? 0.4 : 1 }}>
+        <input type="checkbox" checked={selected.has(keyOf(t))} onChange={() => toggleSel(keyOf(t))} style={{ marginTop: 3, cursor: 'pointer', flexShrink: 0 }} />
         <div className="ib">
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             {t.blocker && <span style={{ fontSize: 9, fontWeight: 700, background: 'var(--rbg)', color: 'var(--red)', padding: '1px 6px', borderRadius: 3 }}>ブロッカー</span>}

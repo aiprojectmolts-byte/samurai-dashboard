@@ -2,7 +2,7 @@
 import { useState, useRef } from 'react'
 
 type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
-interface Task { 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string }
+interface Task { id?: string; 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string }
 interface Question { id: string; text: string; assignee: string; status: 'unanswered'|'answered'; priority: 'high'|'normal'; linkedTask: string; src: string; createdAt?: string }
 interface Extracted { summary: string; tasks: Task[]; questions: Question[]; knowledge?: any[] }
 interface ReviewDisplay { name: string; oldLabel: string; newLabel: string; outcome: '承認'|'FB'|'言及なし'; fbContent?: string }
@@ -124,6 +124,7 @@ ${text.slice(0, 8000)}`
 
       // 新フォーマットのタスクを既存の Task 型にマッピング（登録フローはそのまま使えるようにする）
       const mappedTasks: Task[] = (parsed.tasks || []).map((t: any) => ({
+        id: Date.now().toString() + Math.random().toString(36).slice(2),
         施策: t.category || '施策X',
         name: t.name,
         s: today,
