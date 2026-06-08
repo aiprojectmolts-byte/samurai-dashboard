@@ -2,12 +2,12 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 
-type TaskStatus = 'todo' | 'doing' | 'done' | 'waiting' | 'delayed'
+type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
 
 interface Task {
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
-  assignee?: string; blocker?: boolean; impact?: string; src?: string
+  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string
 }
 
 interface Members { samurai: string[]; molts: string[] }
@@ -83,6 +83,7 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
             <select value={form.st} onChange={e => set('st', e.target.value as TaskStatus)} style={inp}>
               <option value="todo">予定</option>
               <option value="doing">進行中</option>
+              <option value="review">定例確認</option>
               <option value="waiting">着手待ち</option>
               <option value="delayed">遅延</option>
               <option value="done">完了</option>
@@ -106,6 +107,11 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
             <input type="checkbox" checked={form.blocker ?? false} onChange={e => set('blocker', e.target.checked)}
               style={{ width: 14, height: 14, accentColor: 'var(--red)' }} />
             <span style={{ fontSize: 12, color: 'var(--ink)', fontWeight: 500 }}>ブロッカー（他のタスクが止まる）</span>
+          </label>
+
+          <label style={lbl}>
+            備考・FBメモ
+            <textarea value={form.備考 ?? ''} onChange={e => set('備考', e.target.value)} style={{ ...inp, minHeight: 72, resize: 'vertical' }} placeholder="定例での確認事項・フィードバックメモなど（任意）" />
           </label>
         </div>
 

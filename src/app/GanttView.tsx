@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 
-type TaskStatus = 'todo' | 'doing' | 'done' | 'waiting' | 'delayed'
+type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
 
 interface Task {
   施策: string
@@ -16,6 +16,7 @@ interface Task {
   blocker?: boolean
   impact?: string
   src?: string
+  備考?: string
 }
 
 const defaultTasks: Task[] = [
@@ -35,7 +36,7 @@ const defaultTasks: Task[] = [
 ]
 
 const statusLabel: Record<TaskStatus, string> = {
-  todo: '未着手', doing: '進行中', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
+  todo: '未着手', doing: '進行中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
 }
 
 const ownerLabel = { molts: 'THE MOLTS', samurai: 'SAMURAI', both: '共同' }
@@ -44,6 +45,7 @@ const ownerClass = { molts: 'ob-m', samurai: 'ob-s', both: 'ob-b' }
 const barColor: Record<TaskStatus, string> = {
   todo: '#b0b8c4',
   doing: '#f59e0b',
+  review: '#3b82f6',
   done: '#4ade80',
   waiting: '#f87171',
   delayed: '#c2410c',
@@ -229,9 +231,9 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
         <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>ステータス</span>
-            {['all', 'doing', 'waiting', 'delayed', 'todo', 'done'].map(s => (
+            {['all', 'doing', 'review', 'waiting', 'delayed', 'todo', 'done'].map(s => (
               <button key={s} onClick={() => setFilterStatus(s)} style={fbtn(filterStatus === s)}>
-                {s === 'all' ? 'すべて' : s === 'doing' ? '進行中' : s === 'waiting' ? '対応待ち' : s === 'delayed' ? '遅れあり' : s === 'todo' ? '未着手' : '完了'}
+                {s === 'all' ? 'すべて' : s === 'doing' ? '進行中' : s === 'review' ? '定例確認' : s === 'waiting' ? '対応待ち' : s === 'delayed' ? '遅れあり' : s === 'todo' ? '未着手' : '完了'}
               </button>
             ))}
           </div>
@@ -293,7 +295,7 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
                 const groupS = groupTasks.reduce((min, t) => t.s < min ? t.s : min, groupTasks[0].s)
                 const groupE = groupTasks.reduce((max, t) => t.e > max ? t.e : max, groupTasks[0].e)
                 const groupSt = groupTasks.reduce((worst, t) => {
-                  const p: Record<TaskStatus, number> = { waiting: 5, delayed: 4, doing: 3, todo: 2, done: 1 }
+                  const p: Record<TaskStatus, number> = { waiting: 6, delayed: 5, doing: 4, review: 3, todo: 2, done: 1 }
                   return p[t.st] > p[worst] ? t.st : worst
                 }, 'done' as TaskStatus)
 

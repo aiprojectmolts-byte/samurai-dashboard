@@ -13,7 +13,7 @@ import Competitors from './Competitors'
 
 import { useState, useEffect } from 'react'
 
-type TaskStatus = 'todo' | 'doing' | 'done' | 'waiting' | 'delayed'
+type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
 
 interface Task {
   施策: string
@@ -27,6 +27,7 @@ interface Task {
   blocker?: boolean
   impact?: string
   src?: string
+  備考?: string
 }
 
 const defaultTasks: Task[] = [
@@ -46,7 +47,7 @@ const defaultTasks: Task[] = [
 ]
 
 const statusLabel: Record<TaskStatus, string> = {
-  todo: '未着手', doing: '進行中', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
+  todo: '未着手', doing: '進行中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
 }
 
 const ownerLabel = { molts: 'THE MOLTS', samurai: 'SAMURAI', both: '共同' }
@@ -109,6 +110,7 @@ export default function Dashboard() {
 
   const waiting = tasks.filter(t => t.st === 'waiting')
   const delayed = tasks.filter(t => t.st === 'delayed')
+  const review = tasks.filter(t => t.st === 'review')
   const doing = tasks.filter(t => t.st === 'doing')
   const done = tasks.filter(t => t.st === 'done')
 
@@ -148,6 +150,7 @@ export default function Dashboard() {
         .nb { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; line-height: 1.4; }
         .nb-r { background: var(--rbg); color: var(--red); }
         .nb-o { background: var(--obg); color: var(--orange); }
+        .nb-bl { background: #eff6ff; color: #1d4ed8; }
         .main { flex: 1; overflow-y: auto; }
         .pg { padding: 20px 22px 40px; max-width: 1160px; }
         .pg-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 2px; }
@@ -160,6 +163,7 @@ export default function Dashboard() {
         .co { background: var(--obg); color: var(--orange); }
         .cy { background: var(--ybg); color: var(--yellow); }
         .cn { background: #f4f4f2; color: var(--muted); border: 0.5px solid var(--b1); }
+        .cb { background: #eff6ff; color: #1d4ed8; }
         .kgi-card { background: var(--paper); border: 0.5px solid var(--b1); border-radius: var(--r); padding: 16px 20px; margin-bottom: 12px; }
         .kgi-ey { font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
         .kgi-v { font-size: 44px; font-weight: 700; color: var(--ink); letter-spacing: -0.05em; line-height: 1; }
@@ -183,6 +187,7 @@ export default function Dashboard() {
         .il-d { background: var(--obg); color: var(--orange); }
         .il-y { background: var(--ybg); color: var(--yellow); }
         .il-g { background: var(--gbg); color: var(--green); }
+        .il-bl { background: #eff6ff; color: #1d4ed8; }
         .ib { flex: 1; }
         .it { font-size: 13px; font-weight: 500; line-height: 1.35; }
         .id { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
@@ -241,7 +246,7 @@ export default function Dashboard() {
             スケジュール <span className="nb nb-o">{delayed.length}遅延</span>
           </div>
           <div className={`ni${view === 'tasks' ? ' on' : ''}`} onClick={() => setView('tasks')}>
-            タスクトラッカー <span className="nb nb-r">{waiting.length}件</span>
+            タスクトラッカー <span style={{ display: 'flex', gap: 4 }}><span className="nb nb-r">{waiting.length}件</span>{review.length > 0 && <span className="nb nb-bl">{review.length}定例</span>}</span>
           </div>
 <div className={`ni${view === 'questions' ? ' on' : ''}`} onClick={() => setView('questions')}>質問シート</div>
           <div className="sb-div" />
@@ -338,6 +343,24 @@ export default function Dashboard() {
                   ))}
                 </div>
 
+                {review.length > 0 && (
+                  <>
+                    <div className="sh">定例確認</div>
+                    <div className="cw">
+                      <div className="ih" style={{ color: '#1d4ed8' }}>定例確認 <span className="nb nb-bl">{review.length}</span></div>
+                      {review.map((t, i) => (
+                        <div className="ir" key={i}>
+                          <span className="il il-bl">定例確認</span>
+                          <div className="ib">
+                            <div className="it" style={{cursor:"pointer"}} onClick={()=>setModalTask(t)}>{t.name}</div>
+                            <div className="im"><span className="stag">{t.施策}</span><span className={`ob ${ownerClass[t.own]}`}>{ownerLabel[t.own]}</span></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
                 <div className="sh">今週のアクション</div>
                 <div className="tg">
                   {tasks.filter(t => t.st !== 'done' && t.st !== 'todo').slice(0, 4).map((t, i) => (
@@ -348,6 +371,7 @@ export default function Dashboard() {
                         <div className="tname">{t.name}</div>
                         {t.st === 'waiting' && <div className="talert b">対応待ち</div>}
                         {t.st === 'delayed' && <div className="talert d">遅れあり</div>}
+                        {t.st === 'review' && <div className="talert" style={{ color: '#1d4ed8' }}>定例確認</div>}
                         <div className="tmeta"><span className={`ob ${ownerClass[t.own]}`}>{ownerLabel[t.own]}</span></div>
                       </div>
                     </div>

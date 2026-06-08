@@ -1,8 +1,8 @@
 'use client'
 import { useState, useRef } from 'react'
 
-type TaskStatus = 'todo' | 'doing' | 'done' | 'waiting' | 'delayed'
-interface Task { 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string }
+type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
+interface Task { 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string }
 interface Question { id: string; text: string; assignee: string; status: 'unanswered'|'answered'; priority: 'high'|'normal'; linkedTask: string; src: string; createdAt?: string }
 interface Extracted { tasks: Task[]; questions: Question[] }
 

@@ -1,11 +1,11 @@
 'use client'
 import { useState } from 'react'
 
-type TaskStatus = 'todo' | 'doing' | 'done' | 'waiting' | 'delayed'
+type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
 interface Task {
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
-  assignee?: string; blocker?: boolean; impact?: string; src?: string
+  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string
 }
 interface Members { samurai: string[]; molts: string[] }
 interface Props {
@@ -16,7 +16,7 @@ interface Props {
 }
 
 const statusLabel: Record<TaskStatus, string> = {
-  todo: '未着手', doing: '進行中', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
+  todo: '未着手', doing: '進行中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
 }
 const ownerLabel: Record<string, string> = { molts: 'THE MOLTS', samurai: 'SAMURAI', both: '共同' }
 const ownerCls: Record<string, string> = { molts: 'ob-m', samurai: 'ob-s', both: 'ob-b' }
@@ -65,6 +65,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onOpenModa
 
   const waiting = tasks.filter(t => t.st === 'waiting').length
   const delayed = tasks.filter(t => t.st === 'delayed').length
+  const review = tasks.filter(t => t.st === 'review').length
   const doing = tasks.filter(t => t.st === 'doing').length
   const done = tasks.filter(t => t.st === 'done').length
 
@@ -79,9 +80,9 @@ export default function TaskTracker({ tasks, members, onStatusChange, onOpenModa
       <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>ステータス</span>
-          {['all', 'doing', 'waiting', 'delayed', 'todo', 'done'].map(s => (
+          {['all', 'doing', 'review', 'waiting', 'delayed', 'todo', 'done'].map(s => (
             <button key={s} onClick={() => setFilterStatus(s)} style={fbtn(filterStatus === s)}>
-              {s === 'all' ? 'すべて' : s === 'doing' ? '進行中' : s === 'waiting' ? '対応待ち' : s === 'delayed' ? '遅れあり' : s === 'todo' ? '未着手' : '完了'}
+              {s === 'all' ? 'すべて' : s === 'doing' ? '進行中' : s === 'review' ? '定例確認' : s === 'waiting' ? '対応待ち' : s === 'delayed' ? '遅れあり' : s === 'todo' ? '未着手' : '完了'}
             </button>
           ))}
         </div>
@@ -107,8 +108,8 @@ export default function TaskTracker({ tasks, members, onStatusChange, onOpenModa
         </div>
       </div>
 
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-        {[['対応待ち', waiting, 'var(--red)'], ['遅れあり', delayed, 'var(--orange)'], ['進行中', doing, 'var(--yellow)'], ['完了', done, 'var(--green)']].map(([label, count, color]) => (
+      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
+        {[['対応待ち', waiting, 'var(--red)'], ['遅れあり', delayed, 'var(--orange)'], ['定例確認', review, '#1d4ed8'], ['進行中', doing, 'var(--yellow)'], ['完了', done, 'var(--green)']].map(([label, count, color]) => (
           <div key={String(label)} className="sc">
             <div className="sc-ey">{label}</div>
             <div className="sc-v" style={{ color: String(color) }}>{count}</div>
