@@ -197,7 +197,7 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
         .g-row td { border-bottom: 0.5px solid var(--b2); height: 36px; vertical-align: middle; padding: 0; background: var(--paper); }
         .g-row:hover td { background: #fafaf9; }
         .g-row.done-row td { opacity: 0.38; }
-        .t-label { padding: 4px 10px; white-space: nowrap; position: sticky; left: 0; z-index: 10; min-width: 228px; max-width: 228px; border-right: 0.5px solid var(--b1); }
+        .t-label { padding: 4px 10px; white-space: nowrap; position: sticky; left: 0; z-index: 10; min-width: 320px; max-width: 320px; border-right: 0.5px solid var(--b1); }
         .g-group .t-label { background: #fafaf9; font-size: 11px; font-weight: 600; color: var(--ink2); }
         .g-row .t-label { background: var(--paper); }
         .g-row:hover .t-label { background: #fafaf9; }
@@ -205,7 +205,7 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
         .t-check { width: 14px; height: 14px; border: 1.5px solid var(--b1); border-radius: 4px; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #fff; transition: all 0.1s; }
         .t-check:hover { border-color: var(--ink2); }
         .t-check.done { background: var(--green); border-color: var(--green); }
-        .t-name { font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; color: var(--ink); }
+        .t-name { font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px; color: var(--ink); }
         .delay-tag { font-size: 9px; color: var(--orange); background: var(--obg); padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
         .owner-cell { padding: 4px 8px; border-left: 0.5px solid var(--b1); white-space: nowrap; position: sticky; right: 80px; z-index: 9; min-width: 80px; }
         .g-group .owner-cell { background: #fafaf9; }
@@ -271,7 +271,7 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
           <table className="g-table">
             <thead>
               <tr className="g-mrow">
-                <th style={{ minWidth: 228, borderRight: '0.5px solid var(--b1)', position: 'sticky', left: 0, zIndex: 11, background: '#fafaf9' }}></th>
+                <th style={{ minWidth: 320, borderRight: '0.5px solid var(--b1)', position: 'sticky', left: 0, zIndex: 11, background: '#fafaf9' }}></th>
                 {monthGroups.map(m => (
                   <th key={m.label} colSpan={m.count} style={{ borderLeft: '0.5px solid var(--b1)' }}>{m.label}</th>
                 ))}
@@ -315,7 +315,7 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
                             <div className={`t-check${t.st === 'done' ? ' done' : ''}`} onClick={() => toggleDone(t.name)}>
                               {t.st === 'done' ? '✓' : ''}
                             </div>
-                            <span className="t-name" onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span>
+                            <span className="t-name" title={t.name} onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span>
                             {t.st === 'delayed' && <span className="delay-tag">遅れあり</span>}
                             {t.chg && <span className="delay-tag">変更</span>}
                           </div>
