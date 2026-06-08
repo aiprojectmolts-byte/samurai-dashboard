@@ -4,8 +4,10 @@ import { useState, useRef } from 'react'
 type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
 interface Task { 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string }
 interface Question { id: string; text: string; assignee: string; status: 'unanswered'|'answered'; priority: 'high'|'normal'; linkedTask: string; src: string; createdAt?: string }
-interface Extracted { tasks: Task[]; questions: Question[] }
+interface Extracted { summary: string; tasks: Task[]; questions: Question[]; knowledge?: any[] }
 interface ReviewDisplay { name: string; oldLabel: string; newLabel: string; outcome: '承認'|'FB'|'言及なし'; fbContent?: string }
+
+const ownerName = (t: Task) => t.assignee || (t.own === 'molts' ? 'THE MOLTS' : t.own === 'samurai' ? 'SAMURAI' : '共同')
 
 const stLabel: Record<TaskStatus, string> = {
   todo: '未着手', doing: '進行中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
@@ -23,8 +25,12 @@ export default function MtgImport() {
   const [registering, setRegistering] = useState(false)
   const [reviewResults, setReviewResults] = useState<ReviewDisplay[] | null>(null)
   const [reviewMessage, setReviewMessage] = useState('')
+  const [agenda, setAgenda] = useState<string | null>(null)
+  const [agendaMessage, setAgendaMessage] = useState('')
+  const [agendaCopied, setAgendaCopied] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const today = new Date().toISOString().slice(0, 10)
+  const defaultDeadline = () => { const d = new Date(); d.setDate(d.getDate() + 21); return d.toISOString().slice(0, 10) }
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
@@ -51,32 +57,27 @@ export default function MtgImport() {
     setError(''); setLoading(true); setStatus('analyzing')
     const src = `${today} ${mtgName}`
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
+          max_tokens: 3000,
           messages: [{
             role: 'user',
-            content: `以下のMTG議事録・資料から、タスクと質問を抽出してください。
+            content: `以下のMTG議事録・資料から、会議サマリー・タスク・質問・ナレッジを抽出してください。
 
 必ずJSONのみを返し、前後に説明文・マークダウンコードブロックは不要です。
 
 出力形式:
 {
+  "summary": "会議の流れと決定事項のサマリー。誰が何を言い、何が決まり、何が持ち越されたかを時系列で3〜5段落で書く",
   "tasks": [
     {
-      "施策": "施策X",
-      "name": "タスク名（具体的なアクション）",
-      "s": "${today}",
-      "e": "YYYY-MM-DD（期日が明示されていれば、なければ2〜4週間後）",
-      "own": "molts か samurai か both",
-      "st": "todo",
-      "chg": false,
-      "assignee": "担当者名（わかれば）",
-      "blocker": false,
-      "src": "${src}"
+      "name": "タスク名（省略なし）",
+      "deadline": "YYYY-MM-DD（言及があれば。なければ空文字）",
+      "assignee": "担当者名（言及があれば）",
+      "category": "施策カテゴリ（あれば）"
     }
   ],
   "questions": [
@@ -90,10 +91,16 @@ export default function MtgImport() {
       "src": "${src}",
       "createdAt": "${today}"
     }
+  ],
+  "knowledge": [
+    {
+      "label": "ナレッジの分類（自社背景／競合情報／業界インサイト／顧客事例 等）",
+      "content": "ナレッジ内容（markdown形式）"
+    }
   ]
 }
 
-施策の分類基準:
+施策カテゴリ（category）の分類基準:
 - 施策1: 計測・フォーム系
 - 施策2: 事例コンテンツ
 - 施策3: LP制作
@@ -103,11 +110,6 @@ export default function MtgImport() {
 - 施策7: リファラル制度
 - 上記に当てはまらない場合は「施策X」
 
-ownの判断:
-- THE MOLTS側のタスク: "molts"
-- SAMURAI ARCHITECTS側のタスク: "samurai"
-- 両社共同: "both"
-
 ---
 ${text.slice(0, 8000)}`
           }]
@@ -116,10 +118,31 @@ ${text.slice(0, 8000)}`
       const data = await res.json()
       const raw = data.content?.[0]?.text || ''
       const clean = raw.replace(/```json|```/g, '').trim()
-      const parsed: Extracted = JSON.parse(clean)
-      setResult(parsed)
-      setSelectedTasks(new Set(parsed.tasks.map((_, i) => i)))
-      setSelectedQuestions(new Set(parsed.questions.map((_, i) => i)))
+      const parsed = JSON.parse(clean)
+
+      // 新フォーマットのタスクを既存の Task 型にマッピング（登録フローはそのまま使えるようにする）
+      const mappedTasks: Task[] = (parsed.tasks || []).map((t: any) => ({
+        施策: t.category || '施策X',
+        name: t.name,
+        s: today,
+        e: t.deadline || defaultDeadline(),
+        own: 'both' as const,
+        st: 'todo' as TaskStatus,
+        chg: false,
+        assignee: t.assignee || '',
+        blocker: false,
+        src,
+      }))
+
+      const extracted: Extracted = {
+        summary: parsed.summary || '',
+        tasks: mappedTasks,
+        questions: parsed.questions || [],
+        knowledge: parsed.knowledge || [],
+      }
+      setResult(extracted)
+      setSelectedTasks(new Set(mappedTasks.map((_, i) => i)))
+      setSelectedQuestions(new Set((extracted.questions).map((_, i) => i)))
       setStatus('preview')
     } catch (e) {
       setError('解析に失敗しました。もう一度お試しください。')
@@ -181,6 +204,9 @@ ${text.slice(0, 8000)}`
 
       // 定例確認タスクの自動更新（既存の抽出処理の後に実行）
       await updateReviewTasks()
+
+      // 次回定例アジェンダの自動生成
+      await generateAgenda(tasksToAdd)
 
       setStatus('done')
     } catch (e) {
@@ -286,7 +312,78 @@ JSONのみ返してください：
     }
   }
 
-  const reset = () => { setText(''); setMtgName(''); setResult(null); setStatus('idle'); setError(''); setReviewResults(null); setReviewMessage('') }
+  const generateAgenda = async (addedTasks: Task[]) => {
+    setAgenda(null)
+    setAgendaMessage('')
+    setAgendaCopied(false)
+    try {
+      const cut = new Date()
+      cut.setDate(cut.getDate() + 14) // 14日以内
+      const cutoff = cut.toISOString().slice(0, 10)
+
+      // 今回登録したタスクのうち期日が14日以内のもの（e は 'YYYY-MM-DD' 文字列）
+      const upcoming = addedTasks.filter(t => t.e && t.e >= today && t.e <= cutoff)
+
+      // 既存の定例確認タスク（review）
+      const tRes = await fetch('/api/tasks')
+      const fetched = await tRes.json().catch(() => [])
+      const list: Task[] = Array.isArray(fetched) ? fetched : []
+      const reviewTasks = list.filter(t => t.st === 'review')
+
+      if (upcoming.length === 0 && reviewTasks.length === 0) {
+        setAgendaMessage('次回アジェンダの対象タスクはありません')
+        return
+      }
+
+      const combined = {
+        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: ownerName(t), 期限: t.e, 備考: t.備考 || '' })),
+        今週来週: upcoming.map(t => ({ name: t.name, assignee: ownerName(t), 期限: t.e })),
+      }
+
+      const prompt = `以下のタスクをもとに次回週次定例MTGのアジェンダを作成してください。
+今日の日付：${today}
+
+タスク一覧（JSON）：${JSON.stringify(combined, null, 2)}
+
+出力形式：
+📋 次回定例アジェンダ（案）（${today}）
+
+## 1. 定例確認・要判断
+定例確認ステータスのタスクを列挙。備考（FBメモ）があれば表示。
+
+## 2. 今週・来週の確認
+期日が近いタスクを担当者付きで列挙。
+
+タスク名は省略せず全文。0件のセクションは省略。`
+
+      const aiRes = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 2000,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
+      const aiData = await aiRes.json()
+      const out = aiData.content?.[0]?.text || ''
+      if (out.trim()) setAgenda(out)
+      else setAgendaMessage('アジェンダの生成に失敗しました')
+    } catch (e) {
+      setAgendaMessage('アジェンダの生成中にエラーが発生しました')
+    }
+  }
+
+  const copyAgenda = async () => {
+    if (!agenda) return
+    try {
+      await navigator.clipboard.writeText(agenda)
+      setAgendaCopied(true)
+      setTimeout(() => setAgendaCopied(false), 2000)
+    } catch {}
+  }
+
+  const reset = () => { setText(''); setMtgName(''); setResult(null); setStatus('idle'); setError(''); setReviewResults(null); setReviewMessage(''); setAgenda(null); setAgendaMessage(''); setAgendaCopied(false) }
 
   const outcomeColor: Record<ReviewDisplay['outcome'], { fg: string; bg: string }> = {
     '承認': { fg: 'var(--green)', bg: 'var(--gbg)' },
@@ -328,6 +425,23 @@ JSONのみ返してください：
               </div>
             ))}
           </div>
+
+          {(agenda || agendaMessage) && (
+            <div style={{ marginTop: 20 }}>
+              <div className="sh" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>📋 次回定例アジェンダ（案）</span>
+                {agenda && (
+                  <button onClick={copyAgenda}
+                    style={{ padding: '3px 10px', background: agendaCopied ? 'var(--gbg)' : 'none', border: '0.5px solid ' + (agendaCopied ? 'var(--green)' : 'var(--b1)'), borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', color: agendaCopied ? 'var(--green)' : 'var(--ink2)', textTransform: 'none', letterSpacing: 'normal' }}>
+                    {agendaCopied ? '✓ コピーしました' : '📋 コピー'}
+                  </button>
+                )}
+              </div>
+              {agendaMessage
+                ? <div style={{ padding: '12px 14px', background: 'var(--bg)', border: '0.5px solid var(--b1)', borderRadius: 6, fontSize: 12, color: 'var(--muted)' }}>{agendaMessage}</div>
+                : <div style={{ padding: '14px 16px', background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', whiteSpace: 'pre-wrap' }}>{agenda}</div>}
+            </div>
+          )}
         </div>
       ) : status === 'preview' && result ? (
         <div>
@@ -335,6 +449,13 @@ JSONのみ返してください：
             <div style={{ fontWeight: 600, fontSize: 13 }}>抽出結果プレビュー</div>
             <button onClick={reset} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>← やり直す</button>
           </div>
+
+          {result.summary && (
+            <div style={{ marginBottom: 16 }}>
+              <div className="sh" style={{ marginBottom: 8 }}>📝 会議サマリー</div>
+              <div style={{ padding: '14px 16px', background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, fontSize: 12, lineHeight: 1.8, color: 'var(--ink)', whiteSpace: 'pre-wrap' }}>{result.summary}</div>
+            </div>
+          )}
 
           {result.tasks.length > 0 && (
             <div style={{ marginBottom: 16 }}>
