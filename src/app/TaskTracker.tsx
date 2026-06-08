@@ -49,7 +49,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
   const [filterAssignee, setFilterAssignee] = useState('all')
   const [sortBy, setSortBy] = useState('registered')
   const [filterSrc, setFilterSrc] = useState('all')
-  const [viewMode, setViewMode] = useState<'status' | 'deadline'>('status')
+  const [viewMode, setViewMode] = useState<'status' | 'deadline' | 'category'>('status')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkStatus, setBulkStatus] = useState<TaskStatus>('todo')
 
@@ -87,6 +87,15 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
   }
   const deadlineGroups: Record<DeadlineGroup, Task[]> = { '期限切れ': [], '今日': [], '今週': [], '来週': [], 'それ以降': [], '期日なし': [] }
   filtered.forEach(t => deadlineGroups[groupOf(t)].push(t))
+
+  // カテゴリ別グルーピング（施策フィールド。未設定は「未分類」）。出現順を保持
+  const categoryOrder: string[] = []
+  const categoryGroups: Record<string, Task[]> = {}
+  filtered.forEach(t => {
+    const c = t.施策 || '未分類'
+    if (!categoryGroups[c]) { categoryGroups[c] = []; categoryOrder.push(c) }
+    categoryGroups[c].push(t)
+  })
 
   const fbtn = (active: boolean) => ({
     padding: '3px 10px',
@@ -156,7 +165,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
       <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>表示</span>
-          {([['status', 'ステータス別'], ['deadline', '期限別']] as ['status' | 'deadline', string][]).map(([val, label]) => (
+          {([['status', 'ステータス別'], ['deadline', '期限別'], ['category', 'カテゴリ別']] as ['status' | 'deadline' | 'category', string][]).map(([val, label]) => (
             <button key={val} onClick={() => setViewMode(val)} style={fbtn(viewMode === val)}>{label}</button>
           ))}
         </div>
@@ -204,7 +213,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
           {filtered.length === 0 && <div style={{ padding: '20px 14px', color: 'var(--muted)', fontSize: 12 }}>該当するタスクがありません</div>}
           {filtered.map(renderRow)}
         </div>
-      ) : (
+      ) : viewMode === 'deadline' ? (
         <div>
           {filtered.length === 0 && <div className="cw"><div style={{ padding: '20px 14px', color: 'var(--muted)', fontSize: 12 }}>該当するタスクがありません</div></div>}
           {DEADLINE_GROUPS.filter(g => deadlineGroups[g].length > 0).map(g => (
@@ -212,6 +221,18 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
               <div className="sh" style={{ marginBottom: 8 }}>{deadlineGroupLabel[g]}（{deadlineGroups[g].length}）</div>
               <div className="cw">
                 {deadlineGroups[g].map(renderRow)}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div>
+          {filtered.length === 0 && <div className="cw"><div style={{ padding: '20px 14px', color: 'var(--muted)', fontSize: 12 }}>該当するタスクがありません</div></div>}
+          {categoryOrder.map(c => (
+            <div key={c} style={{ marginBottom: 12 }}>
+              <div className="sh" style={{ marginBottom: 8 }}>{c}（{categoryGroups[c].length}）</div>
+              <div className="cw">
+                {categoryGroups[c].map(renderRow)}
               </div>
             </div>
           ))}
