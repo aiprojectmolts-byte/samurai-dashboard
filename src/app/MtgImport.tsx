@@ -5,6 +5,11 @@ type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
 interface Task { 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string }
 interface Question { id: string; text: string; assignee: string; status: 'unanswered'|'answered'; priority: 'high'|'normal'; linkedTask: string; src: string; createdAt?: string }
 interface Extracted { tasks: Task[]; questions: Question[] }
+interface ReviewDisplay { name: string; oldLabel: string; newLabel: string; outcome: '承認'|'FB'|'言及なし'; fbContent?: string }
+
+const stLabel: Record<TaskStatus, string> = {
+  todo: '未着手', doing: '進行中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
+}
 
 export default function MtgImport() {
   const [text, setText] = useState('')
@@ -16,6 +21,8 @@ export default function MtgImport() {
   const [status, setStatus] = useState<'idle'|'analyzing'|'preview'|'done'>('idle')
   const [error, setError] = useState('')
   const [registering, setRegistering] = useState(false)
+  const [reviewResults, setReviewResults] = useState<ReviewDisplay[] | null>(null)
+  const [reviewMessage, setReviewMessage] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const today = new Date().toISOString().slice(0, 10)
 
@@ -172,6 +179,9 @@ ${text.slice(0, 8000)}`
         })
       })
 
+      // 定例確認タスクの自動更新（既存の抽出処理の後に実行）
+      await updateReviewTasks()
+
       setStatus('done')
     } catch (e) {
       setError('登録に失敗しました')
@@ -179,7 +189,110 @@ ${text.slice(0, 8000)}`
     setRegistering(false)
   }
 
-  const reset = () => { setText(''); setMtgName(''); setResult(null); setStatus('idle'); setError('') }
+  const updateReviewTasks = async () => {
+    setReviewResults(null)
+    setReviewMessage('')
+    try {
+      // 1. 現在のタスク一覧を取得
+      const tRes = await fetch('/api/tasks')
+      const fetched = await tRes.json().catch(() => [])
+      const list: Task[] = Array.isArray(fetched) ? fetched : []
+
+      // 2. 定例確認（review）タスクのみ抽出
+      const reviewTasks = list.filter(t => t.st === 'review')
+
+      // 3. 0件ならスキップ
+      if (reviewTasks.length === 0) {
+        setReviewMessage('定例確認中のタスクはありません')
+        return
+      }
+
+      // 4. Claude で議事録との照合
+      const taskPayload = reviewTasks.map(t => ({ taskId: (t as any).id || t.name, name: t.name, 施策: t.施策 }))
+      const prompt = `以下は週次定例MTGの議事録です。
+その後に「定例確認中のタスク一覧」があります。
+
+各タスクについて、この議事録の中で言及・議論されているか判定し、
+結果とFB内容を抽出してください。
+
+議事録：
+${text.slice(0, 12000)}
+
+定例確認中のタスク一覧（JSON）：
+${JSON.stringify(taskPayload, null, 2)}
+
+JSONのみ返してください：
+{
+  "results": [
+    {
+      "taskId": "タスクのidまたは識別子",
+      "mentioned": true,
+      "outcome": "承認" または "FB" または "言及なし",
+      "fbContent": "FBがある場合のみ内容を記載"
+    }
+  ]
+}
+
+タスク名が議事録中で完全一致しない場合は意味的に照合すること。
+確信が持てない場合は「言及なし」にすること。`
+
+      const aiRes = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 2000,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
+      const aiData = await aiRes.json()
+      const rawText = aiData.content?.[0]?.text || ''
+
+      let parsed: { results?: any[] } | null = null
+      try { parsed = JSON.parse(rawText.replace(/```json|```/g, '').trim()) } catch { parsed = null }
+
+      if (!parsed || !Array.isArray(parsed.results)) {
+        setReviewMessage('定例確認の解析に失敗しました（応答をJSONとして読み取れませんでした）')
+        return
+      }
+
+      // 5. 照合結果をもとにタスクを更新
+      const display: ReviewDisplay[] = []
+      const updated = list.map(t => {
+        if (t.st !== 'review') return t
+        const key = (t as any).id || t.name
+        const r = parsed!.results!.find((x: any) => x.taskId === key || x.taskId === t.name || x.taskId === (t as any).id)
+
+        if (r && r.outcome === '承認') {
+          display.push({ name: t.name, oldLabel: stLabel['review'], newLabel: stLabel['done'], outcome: '承認' })
+          return { ...t, st: 'done' as TaskStatus }
+        }
+        if (r && r.outcome === 'FB') {
+          const fb = `[定例FB ${today}] ${r.fbContent || ''}`.trim()
+          const newMemo = t.備考 ? `${t.備考}\n${fb}` : fb
+          display.push({ name: t.name, oldLabel: stLabel['review'], newLabel: stLabel['doing'], outcome: 'FB', fbContent: r.fbContent })
+          return { ...t, st: 'doing' as TaskStatus, 備考: newMemo }
+        }
+        // 言及なし（またはマッチなし）→ 変更なし
+        display.push({ name: t.name, oldLabel: stLabel[t.st], newLabel: stLabel[t.st], outcome: '言及なし' })
+        return t
+      })
+
+      // 6. 全置換保存
+      await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      setReviewResults(display)
+    } catch (e) {
+      setReviewMessage('定例確認タスクの更新中にエラーが発生しました')
+    }
+  }
+
+  const reset = () => { setText(''); setMtgName(''); setResult(null); setStatus('idle'); setError(''); setReviewResults(null); setReviewMessage('') }
+
+  const outcomeColor: Record<ReviewDisplay['outcome'], { fg: string; bg: string }> = {
+    '承認': { fg: 'var(--green)', bg: 'var(--gbg)' },
+    'FB': { fg: '#1d4ed8', bg: '#eff6ff' },
+    '言及なし': { fg: 'var(--muted)', bg: 'var(--bg)' },
+  }
 
   const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', border: '0.5px solid var(--b1)', borderRadius: 6, fontSize: 12, fontFamily: 'inherit', background: 'var(--paper)', color: 'var(--ink)', boxSizing: 'border-box' }
 
@@ -189,11 +302,32 @@ ${text.slice(0, 8000)}`
       <div className="pg-sub">議事録・資料をアップロードして、タスクと質問を自動抽出します</div>
 
       {status === 'done' ? (
-        <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 24, textAlign: 'center' }}>
-          <div style={{ fontSize: 24, marginBottom: 8 }}>✅</div>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>登録完了しました</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>タスクトラッカー・質問シートに反映されました</div>
-          <button onClick={reset} style={{ padding: '7px 20px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>続けて取り込む</button>
+        <div>
+          <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 24, textAlign: 'center' }}>
+            <div style={{ fontSize: 24, marginBottom: 8 }}>✅</div>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>登録完了しました</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 16 }}>タスクトラッカー・質問シートに反映されました</div>
+            <button onClick={reset} style={{ padding: '7px 20px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>続けて取り込む</button>
+          </div>
+
+          <div style={{ marginTop: 20 }}>
+            <div className="sh" style={{ marginBottom: 8 }}>📋 定例確認タスクの更新結果</div>
+            {reviewMessage && (
+              <div style={{ padding: '12px 14px', background: 'var(--bg)', border: '0.5px solid var(--b1)', borderRadius: 6, fontSize: 12, color: 'var(--muted)' }}>{reviewMessage}</div>
+            )}
+            {reviewResults && reviewResults.map((r, i) => (
+              <div key={i} style={{ padding: '10px 12px', background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, fontWeight: 500 }}>{r.name}</span>
+                  <span style={{ fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 3, color: outcomeColor[r.outcome].fg, background: outcomeColor[r.outcome].bg }}>
+                    {r.outcome === '言及なし' ? '言及なし（変更なし）' : r.outcome}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{r.oldLabel} → {r.newLabel}</span>
+                </div>
+                {r.fbContent && <div style={{ fontSize: 11, color: 'var(--ink2)', marginTop: 4, whiteSpace: 'pre-wrap' }}>FB: {r.fbContent}</div>}
+              </div>
+            ))}
+          </div>
         </div>
       ) : status === 'preview' && result ? (
         <div>
