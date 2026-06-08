@@ -9,6 +9,9 @@ interface Plan {
   target: string
   angle: string
   point: string
+  persona?: string
+  stage?: string
+  ceoAngle?: string
 }
 
 interface Expression {
@@ -395,6 +398,30 @@ ${inputText.slice(0, 3000)}`
 - カタチ（建築）× 施策（経営）の二項融合。ハードとソフト、両方の視点を持つ
 - 変革の受け入れは半分程度。「どっちの意見も分かる」という姿勢で語る
 
+【ターゲットペルソナと態度】
+以下の3ペルソナ × 7態度のどのマスに向けた企画かを必ず明示すること。
+
+ペルソナ：
+・中小工務店経営者：現場優先、デジタル苦手意識あり、即効性・コスト重視
+・設計事務所経営者：クリエイティブ重視、品質意識高、新技術への好奇心あり
+・大手ディベロッパーDX担当者：組織的意思決定、ROI・スケール重視
+
+態度（フェーズ）：
+・日常：課題をまだ認識していない
+・課題認知：何か問題があると感じ始めた
+・きっかけ：SAMURAIの存在を知った
+・自分事化：自分に関係あると感じた（★最も刺さる山場）
+・比較検討：他の選択肢と比べている
+・商談・アポ：具体的な話を始めている
+・導入・伴走：使い始めた・継続中
+
+【加藤CEO視点の入れ方】
+テーマ軸を「必ず1つ選べ」という制約はかけない。
+ただし、この企画で加藤CEOがどういう角度・比喩・語り口で語るかを
+ceoAngle フィールドに必ず言語化すること。
+「汎用ビジネス記事的な表現」ではなく、
+加藤CEO個人が語っていると分かる視点を入れること。
+
 【発信媒体：${publishTarget === 'kato_note' ? '加藤CEO個人note' : publishTarget === 'company_x' ? '会社公式X' : '加藤CEO個人note + 会社公式X'}】
 ${publishTarget === 'kato_note' ? `
 → 加藤CEO個人の思想・原体験・比喩を前面に出す企画
@@ -416,7 +443,7 @@ ${publishTarget === 'kato_note' ? `
 「現場で語られた課題 × 自社の強み × 競合との差 × 加藤CEOの発信テーマ軸」が交差する企画が最も価値が高いです。
 NG表現が企画タイトル・切り口・核心に含まれていないことを必ず確認してください。
 特定の企業名・顧客名・個人名は使わないこと。業界・市場・ターゲット層として抽象化すること。
-JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心"}]}`,
+JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心","persona":"中小工務店経営者 | 設計事務所経営者 | 大手ディベロッパーDX担当者 のいずれか","stage":"日常 | 課題認知 | きっかけ | 自分事化 | 比較検討 | 商談・アポ | 導入・伴走 のいずれか","ceoAngle":"この企画で使う加藤CEO的な視点・比喩・語り口を1〜2文で"}]}`,
         `以下の情報から発信企画を${planCount}つ考えてください。${pastPlans}
 
 【今回の入力資料】
@@ -494,12 +521,16 @@ JSONのみ返してください：
       {
         "text": "確認が必要な表現",
         "context": "この表現をどの文脈・場面で使うか",
-        "checkPoint": "加藤CEOに確認したいこと"
+        "checkPoint": "この表現を、この文脈で使ってOKか。NG・要修正であれば言い換え案を教えてほしい、という1文のみ"
       }
     ],
     "confirmationDoc": "加藤CEOへの確認依頼文（プレーンテキスト）"
   }]
 }
+
+checkPoint は「この表現・この言い回しを、この文脈で使ってOKか」だけを問う1文にすること。
+構成の判断・執筆方針・フォロー範囲など、表現の是非以外の内容を確認ポイントに含めないこと。
+加藤CEOに確認してもらうのは「この表現・この言い回しはOKか」だけに絞ること。
 
 confirmationDoc は以下のフォーマットで生成：
 ---
@@ -759,6 +790,13 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                     </div>
                   ))}
                 </div>
+                {(p.persona || p.stage || p.ceoAngle) && (
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: '0.5px solid var(--b1)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {p.persona && <div style={{ fontSize: 11 }}><span style={{ fontWeight: 600, color: 'var(--muted)' }}>ペルソナ：</span><span style={{ color: 'var(--ink2)' }}>{p.persona}</span></div>}
+                    {p.stage && <div style={{ fontSize: 11 }}><span style={{ fontWeight: 600, color: 'var(--muted)' }}>フェーズ：</span><span style={{ color: 'var(--ink2)' }}>{p.stage}</span></div>}
+                    {p.ceoAngle && <div style={{ fontSize: 11 }}><span style={{ fontWeight: 600, color: 'var(--muted)' }}>加藤CEO視点：</span><span style={{ color: 'var(--ink2)' }}>{p.ceoAngle}</span></div>}
+                  </div>
+                )}
               </div>
             ))}
           </div>
