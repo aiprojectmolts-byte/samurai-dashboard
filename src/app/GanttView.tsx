@@ -137,6 +137,10 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
     color: active ? '#fff' : 'var(--ink2)',
   })
   const [saving, setSaving] = useState(false)
+  const [agenda, setAgenda] = useState<string | null>(null)
+  const [agendaLoading, setAgendaLoading] = useState(false)
+  const [agendaOpen, setAgendaOpen] = useState(true)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (propTasks && propTasks.length > 0) setTasks(propTasks)
@@ -151,6 +155,95 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
   const toggleDone = (taskName: string) => {
     const t = tasks.find(t => t.name === taskName)!
     updateStatus(taskName, t.st === 'done' ? 'doing' : 'done')
+  }
+
+  const generateAgenda = async () => {
+    setAgendaLoading(true)
+    setCopied(false)
+    setAgendaOpen(true)
+    try {
+      // a. タスク一覧を取得
+      const res = await fetch('/api/tasks')
+      const fetched = await res.json().catch(() => [])
+      const list: Task[] = Array.isArray(fetched) ? fetched : []
+
+      // 期限フィールド e は 'YYYY-MM-DD' 文字列。文字列比較で日付を判定できる
+      const today = new Date().toISOString().slice(0, 10)
+      const cut = new Date()
+      cut.setDate(cut.getDate() + 14) // 今週・来週（2週間先まで）
+      const cutoff = cut.toISOString().slice(0, 10)
+
+      const owner = (t: Task) => t.assignee || ownerLabel[t.own]
+
+      // b. 3グループに分類
+      const reviewTasks = list.filter(t => t.st === 'review')
+      const upcomingDoing = list.filter(t => t.st === 'doing' && t.e && t.e >= today && t.e <= cutoff)
+      const overdue = list.filter(t => t.st !== 'done' && t.st !== 'review' && t.e && t.e < today)
+
+      // 全グループ0件
+      if (reviewTasks.length === 0 && upcomingDoing.length === 0 && overdue.length === 0) {
+        setAgenda('対象タスクがありません')
+        setAgendaLoading(false)
+        return
+      }
+
+      const classified = {
+        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: owner(t), 期限: t.e, 備考: t.備考 || '' })),
+        進行中_今週来週: upcomingDoing.map(t => ({ name: t.name, assignee: owner(t), 期限: t.e })),
+        遅延: overdue.map(t => ({ name: t.name, assignee: owner(t), 期限: t.e })),
+      }
+
+      const prompt = `以下のタスクをもとに週次定例MTGのアジェンダを作成してください。
+今日の日付：${today}
+
+タスク一覧（JSON）：
+${JSON.stringify(classified, null, 2)}
+
+必ずこの形式で出力すること：
+
+📋 週次定例アジェンダ（${today}）
+
+## 1. 定例確認・要判断
+定例確認ステータスのタスクを列挙。
+備考（FBメモ）がある場合はタスク名の下にインデントして表示。
+このセクションが会議の最優先議題。
+
+## 2. 進行中・今週の確認
+期限が直近のタスクの進捗確認。担当者名を含めること。
+
+## 3. 遅延・注意
+期限切れタスクがあれば列挙。なければこのセクションを省略。
+
+- タスク名は省略せず全文で出力
+- 担当者名を各タスクに含める
+- 対象タスクが0件のセクションは省略`
+
+      // c. Claude に送信
+      const aiRes = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 2000,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      })
+      const aiData = await aiRes.json()
+      const out = aiData.content?.[0]?.text || ''
+      setAgenda(out || 'アジェンダの生成に失敗しました')
+    } catch (e) {
+      setAgenda('アジェンダの生成中にエラーが発生しました')
+    }
+    setAgendaLoading(false)
+  }
+
+  const copyAgenda = async () => {
+    if (!agenda) return
+    try {
+      await navigator.clipboard.writeText(agenda)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {}
   }
 
   const sakuGroups = buildGroups(filteredTasks)
@@ -258,7 +351,13 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
             ))}
           </div>
         </div>
-        {saving && <span style={{ fontSize: 10, color: 'var(--muted)' }}>保存中...</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {saving && <span style={{ fontSize: 10, color: 'var(--muted)' }}>保存中...</span>}
+          <button onClick={generateAgenda} disabled={agendaLoading}
+            style={{ padding: '6px 14px', background: agendaLoading ? 'var(--b1)' : 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 11, fontWeight: 600, cursor: agendaLoading ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+            {agendaLoading ? '生成中...' : '📋 アジェンダ生成'}
+          </button>
+        </div>
       </div>
 
       <div className="cw">
@@ -342,6 +441,24 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
           </table>
         </div>
       </div>
+
+      {agenda !== null && (
+        <div className="cw" style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', borderBottom: agendaOpen ? '0.5px solid var(--b1)' : 'none', background: '#fafaf9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setAgendaOpen(o => !o)}>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>{agendaOpen ? '▼' : '▶'}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>週次定例アジェンダ</span>
+            </div>
+            <button onClick={copyAgenda}
+              style={{ padding: '4px 10px', background: copied ? 'var(--gbg)' : 'none', border: '0.5px solid ' + (copied ? 'var(--green)' : 'var(--b1)'), borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', color: copied ? 'var(--green)' : 'var(--ink2)' }}>
+              {copied ? '✓ コピーしました' : '📋 コピー'}
+            </button>
+          </div>
+          {agendaOpen && (
+            <div style={{ padding: '14px 16px', fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{agenda}</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
