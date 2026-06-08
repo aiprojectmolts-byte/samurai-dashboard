@@ -94,6 +94,7 @@ export default function MtgImport() {
   ],
   "knowledge": [
     {
+      "title": "ナレッジのタイトル（内容を端的に表す見出し）",
       "label": "ナレッジの分類（自社背景／競合情報／業界インサイト／顧客事例 等）",
       "content": "ナレッジ内容（markdown形式）"
     }
@@ -172,35 +173,24 @@ ${text.slice(0, 8000)}`
         await fetch('/api/questions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newList) })
       }
 
-      // ナレッジにも自動保存
-      await fetch('/api/knowledge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: `kb_mtg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-          filename: mtgName,
-          label: 'MTG議事録',
-          summary: `タスク${tasksToAdd.length}件・質問${questionsToAdd.length}件を含むMTG議事録`,
-          date: today,
-          text: text.slice(0, 10000),
-          createdAt: new Date().toISOString()
+      // AIが分類・要約したナレッジを登録（空配列ならスキップ）。
+      // /api/knowledge は1リクエストにつき1エントリを受け取るため、項目ごとにPOSTする。
+      const knowledgeToAdd = result.knowledge || []
+      for (let i = 0; i < knowledgeToAdd.length; i++) {
+        const k = knowledgeToAdd[i]
+        await fetch('/api/knowledge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: `kb_mtg_${Date.now()}_${i}_${Math.random().toString(36).slice(2)}`,
+            title: k.title || `【${k.label || 'ナレッジ'}】${mtgName}`,
+            content: k.content || '',
+            label: k.label || 'その他',
+            source: `${today} ${mtgName}`,
+            createdAt: new Date().toISOString(),
+          })
         })
-      })
-
-      // ナレッジにも自動保存
-      await fetch('/api/knowledge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: `kb_mtg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-          filename: mtgName,
-          label: 'MTG議事録',
-          summary: `タスク${tasksToAdd.length}件・質問${questionsToAdd.length}件を含むMTG議事録`,
-          date: today,
-          text: text.slice(0, 10000),
-          createdAt: new Date().toISOString()
-        })
-      })
+      }
 
       // 定例確認タスクの自動更新（既存の抽出処理の後に実行）
       await updateReviewTasks()
