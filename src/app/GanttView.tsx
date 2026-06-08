@@ -141,10 +141,25 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
   const [agendaLoading, setAgendaLoading] = useState(false)
   const [agendaOpen, setAgendaOpen] = useState(true)
   const [copied, setCopied] = useState(false)
+  const [confirmed, setConfirmed] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [confirmError, setConfirmError] = useState('')
+  const [pastAgendas, setPastAgendas] = useState<any[]>([])
+  const [expandedAgenda, setExpandedAgenda] = useState<number | null>(null)
 
   useEffect(() => {
     if (propTasks && propTasks.length > 0) setTasks(propTasks)
   }, [propTasks])
+
+  const loadPastAgendas = async () => {
+    try {
+      const res = await fetch('/api/agendas')
+      const data = await res.json()
+      if (Array.isArray(data)) setPastAgendas(data)
+    } catch {}
+  }
+
+  useEffect(() => { loadPastAgendas() }, [])
 
   const updateStatus = (taskName: string, st: TaskStatus) => {
     const updated = tasks.map(t => t.name === taskName ? { ...t, st } : t)
@@ -161,6 +176,8 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
     setAgendaLoading(true)
     setCopied(false)
     setAgendaOpen(true)
+    setConfirmed(false)
+    setConfirmError('')
     try {
       // a. タスク一覧を取得
       const res = await fetch('/api/tasks')
@@ -216,7 +233,11 @@ ${JSON.stringify(classified, null, 2)}
 
 - タスク名は省略せず全文で出力
 - 担当者名を各タスクに含める
-- 対象タスクが0件のセクションは省略`
+- 対象タスクが0件のセクションは省略
+
+定例確認タスクの備考フィールドに [定例FB 日付] の形式でFB内容が記録されている場合、
+そのタスクのアジェンダ項目に出典を付けること。
+出典の形式：← 前回MTG(日付)：FBの内容`
 
       // c. Claude に送信
       const aiRes = await fetch('/api/claude', {
@@ -245,6 +266,34 @@ ${JSON.stringify(classified, null, 2)}
       setTimeout(() => setCopied(false), 2000)
     } catch {}
   }
+
+  const confirmAgenda = async () => {
+    if (!agenda || confirmed) return
+    setConfirming(true)
+    setConfirmError('')
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const res = await fetch('/api/agendas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `定例アジェンダ ${today}`,
+          content: agenda,
+          date: today,
+          source: 'スケジュール画面から生成',
+        })
+      })
+      if (!res.ok) throw new Error('save failed')
+      setConfirmed(true)
+      await loadPastAgendas()
+    } catch (e) {
+      setConfirmError('アジェンダの確定に失敗しました')
+    }
+    setConfirming(false)
+  }
+
+  const agendaNonContent = ['対象タスクがありません', 'アジェンダの生成に失敗しました', 'アジェンダの生成中にエラーが発生しました']
+  const isRealAgenda = agenda !== null && !agendaNonContent.includes(agenda)
 
   const sakuGroups = buildGroups(filteredTasks)
 
@@ -449,14 +498,42 @@ ${JSON.stringify(classified, null, 2)}
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>{agendaOpen ? '▼' : '▶'}</span>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>週次定例アジェンダ</span>
             </div>
-            <button onClick={copyAgenda}
-              style={{ padding: '4px 10px', background: copied ? 'var(--gbg)' : 'none', border: '0.5px solid ' + (copied ? 'var(--green)' : 'var(--b1)'), borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', color: copied ? 'var(--green)' : 'var(--ink2)' }}>
-              {copied ? '✓ コピーしました' : '📋 コピー'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button onClick={copyAgenda}
+                style={{ padding: '4px 10px', background: copied ? 'var(--gbg)' : 'none', border: '0.5px solid ' + (copied ? 'var(--green)' : 'var(--b1)'), borderRadius: 4, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', color: copied ? 'var(--green)' : 'var(--ink2)' }}>
+                {copied ? '✓ コピーしました' : '📋 コピー'}
+              </button>
+              {isRealAgenda && (
+                <button onClick={confirmAgenda} disabled={confirmed || confirming}
+                  style={{ padding: '4px 10px', background: confirmed ? 'var(--gbg)' : 'var(--ink)', border: '0.5px solid ' + (confirmed ? 'var(--green)' : 'var(--ink)'), borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: (confirmed || confirming) ? 'default' : 'pointer', fontFamily: 'inherit', color: confirmed ? 'var(--green)' : '#fff', whiteSpace: 'nowrap' }}>
+                  {confirmed ? '✓ 確定済み' : confirming ? '確定中...' : '✓ このアジェンダを確定する'}
+                </button>
+              )}
+            </div>
           </div>
+          {confirmError && <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--red)' }}>{confirmError}</div>}
           {agendaOpen && (
             <div style={{ padding: '14px 16px', fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{agenda}</div>
           )}
+        </div>
+      )}
+
+      {pastAgendas.length > 0 && (
+        <div className="cw" style={{ marginTop: 12 }}>
+          <div style={{ padding: '8px 14px', borderBottom: '0.5px solid var(--b1)', background: '#fafaf9', fontSize: 11, fontWeight: 600, color: 'var(--ink2)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>過去の確定アジェンダ</div>
+          {pastAgendas.slice(0, 5).map((a: any) => (
+            <div key={a.id} style={{ borderBottom: '0.5px solid var(--b2)' }}>
+              <div onClick={() => setExpandedAgenda(e => e === a.id ? null : a.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', cursor: 'pointer' }}>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{expandedAgenda === a.id ? '▼' : '▶'}</span>
+                <span style={{ fontSize: 11, color: 'var(--muted)', minWidth: 80 }}>{a.date}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--ink)' }}>{a.title}</span>
+              </div>
+              {expandedAgenda === a.id && (
+                <div style={{ padding: '0 16px 14px', fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{a.content}</div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

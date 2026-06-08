@@ -28,6 +28,7 @@ export default function MtgImport() {
   const [agenda, setAgenda] = useState<string | null>(null)
   const [agendaMessage, setAgendaMessage] = useState('')
   const [agendaCopied, setAgendaCopied] = useState(false)
+  const [summarySaved, setSummarySaved] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const today = new Date().toISOString().slice(0, 10)
   const defaultDeadline = () => { const d = new Date(); d.setDate(d.getDate() + 21); return d.toISOString().slice(0, 10) }
@@ -145,6 +146,19 @@ ${text.slice(0, 8000)}`
       setSelectedTasks(new Set(mappedTasks.map((_, i) => i)))
       setSelectedQuestions(new Set((extracted.questions).map((_, i) => i)))
       setStatus('preview')
+
+      // サマリー生成完了直後に自動保存（失敗しても取り込みは止めない）
+      setSummarySaved(false)
+      if (extracted.summary) {
+        try {
+          await fetch('/api/meeting-summaries', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: `MTGサマリー ${today}`, content: extracted.summary, date: today })
+          })
+          setSummarySaved(true)
+        } catch {}
+      }
     } catch (e) {
       setError('解析に失敗しました。もう一度お試しください。')
       setStatus('idle')
@@ -373,7 +387,7 @@ JSONのみ返してください：
     } catch {}
   }
 
-  const reset = () => { setText(''); setMtgName(''); setResult(null); setStatus('idle'); setError(''); setReviewResults(null); setReviewMessage(''); setAgenda(null); setAgendaMessage(''); setAgendaCopied(false) }
+  const reset = () => { setText(''); setMtgName(''); setResult(null); setStatus('idle'); setError(''); setReviewResults(null); setReviewMessage(''); setAgenda(null); setAgendaMessage(''); setAgendaCopied(false); setSummarySaved(false) }
 
   const outcomeColor: Record<ReviewDisplay['outcome'], { fg: string; bg: string }> = {
     '承認': { fg: 'var(--green)', bg: 'var(--gbg)' },
@@ -442,7 +456,10 @@ JSONのみ返してください：
 
           {result.summary && (
             <div style={{ marginBottom: 16 }}>
-              <div className="sh" style={{ marginBottom: 8 }}>📝 会議サマリー</div>
+              <div className="sh" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>📝 会議サマリー</span>
+                {summarySaved && <span style={{ fontSize: 10, color: 'var(--green)', textTransform: 'none', letterSpacing: 'normal', fontWeight: 500 }}>📝 サマリーを保存しました</span>}
+              </div>
               <div style={{ padding: '14px 16px', background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, fontSize: 12, lineHeight: 1.8, color: 'var(--ink)', whiteSpace: 'pre-wrap' }}>{result.summary}</div>
             </div>
           )}
