@@ -4,7 +4,9 @@ import type { CSSProperties } from 'react'
 
 interface Category { id: string; name: string }
 
-export default function CategorySettings() {
+interface Props { onCategoryChange?: () => void }
+
+export default function CategorySettings({ onCategoryChange }: Props) {
   const [categories, setCategories] = useState<Category[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
@@ -35,6 +37,7 @@ export default function CategorySettings() {
       if (!res.ok) throw new Error()
       cancelEdit()
       await load()
+      onCategoryChange?.()
     } catch { setError('カテゴリ名の変更に失敗しました') }
     setBusy(false)
   }
@@ -59,6 +62,7 @@ export default function CategorySettings() {
       if (!res.ok) throw new Error()
       setConfirmDeleteId(null)
       await load()
+      onCategoryChange?.()
     } catch { setError('カテゴリの削除に失敗しました') }
     setBusy(false)
   }

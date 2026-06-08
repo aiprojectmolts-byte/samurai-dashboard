@@ -107,6 +107,27 @@ export default function Dashboard() {
     await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
   }
 
+  const reloadTasks = async () => {
+    try {
+      const r = await fetch('/api/tasks')
+      const data = await r.json()
+      if (Array.isArray(data)) setTasks(data)
+    } catch {}
+  }
+
+  const bulkUpdateStatus = async (names: string[], st: TaskStatus) => {
+    const nameSet = new Set(names)
+    const updated = tasks.map(t => nameSet.has(t.name) ? { ...t, st } : t)
+    setTasks(updated)
+    setSaving(true)
+    try {
+      await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+      const now = new Date()
+      setLastSaved(`${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`)
+    } catch {}
+    setSaving(false)
+  }
+
   useEffect(() => { fetch('/api/members').then(r => r.json()).then(data => setMembers(data)).catch(() => {}) }, [])
 
   const waiting = tasks.filter(t => t.st === 'waiting')
@@ -383,7 +404,7 @@ export default function Dashboard() {
             )}
 
             {/* タスクトラッカー */}
-            {view === 'tasks' && <TaskTracker tasks={tasks} members={members} onStatusChange={(idx, st) => updateTaskStatus(idx, st as any)} onOpenModal={(t) => setModalTask(t)} />}
+            {view === 'tasks' && <TaskTracker tasks={tasks} members={members} onStatusChange={(idx, st) => updateTaskStatus(idx, st as any)} onBulkStatusChange={(names, st) => bulkUpdateStatus(names, st as any)} onOpenModal={(t) => setModalTask(t)} />}
             {view === 'kpi' && <KpiView />}
             {view === 'settings' && (
               <div>
@@ -443,7 +464,7 @@ export default function Dashboard() {
             {view === 'content-gen' && <ContentGen />}
             {view === 'knowledge' && <Knowledge />}
             {view === 'competitors' && <Competitors />}
-            {view === 'category-settings' && <CategorySettings />}
+            {view === 'category-settings' && <CategorySettings onCategoryChange={reloadTasks} />}
             {view === 'members' && (
               <div>
                 <div className="pg-title">メンバー管理</div>
