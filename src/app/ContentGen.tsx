@@ -13,7 +13,9 @@ interface Plan {
 
 interface Expression {
   text: string
-  reason: string
+  reason?: string
+  context?: string
+  checkPoint?: string
   judgment: 'OK' | 'NG' | '保留' | ''
 }
 
@@ -22,6 +24,7 @@ interface EditedPlan extends Plan {
   ngExpressions: string[]
   expressions: Expression[]
   direction: string
+  confirmationDoc?: string
 }
 
 interface Content {
@@ -65,6 +68,15 @@ export default function ContentGen() {
   const [showHistory, setShowHistory] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState('')
+  const [copiedDocIdx, setCopiedDocIdx] = useState<number | null>(null)
+
+  const copyDoc = async (idx: number, doc: string) => {
+    try {
+      await navigator.clipboard.writeText(doc)
+      setCopiedDocIdx(idx)
+      setTimeout(() => setCopiedDocIdx(c => c === idx ? null : c), 2000)
+    } catch {}
+  }
 
   // Word出力
   const exportWord = async (title: string, sections: {heading: string, body: string}[]) => {
@@ -261,7 +273,7 @@ ${inputText.slice(0, 3000)}`
         ...(p.expressions || []).map((ex: any) => ({
           expression: ex.text,
           judgment: '',
-          reason: ex.reason || '',
+          reason: ex.context || ex.checkPoint || ex.reason || '',
           type: '',
           theme: p.title || '',
           target: p.target || '',
@@ -448,13 +460,68 @@ ${knowledge.competitive}` : ''}`
         const batch = selectedPlans.slice(i, i + batchSize)
         const batchResult = await callClaude(
           `あなたはSAMURAI ARCHITECTSの編集担当AIです。${pastNg}
-企画案に対して「この企画で使いうる表現候補」を提案してください。判定はしません。
-各表現について、なぜこの文脈で有効か・避けるべきかの理由を必ず書いてください。
-ルール：
+
+企画案をもとに2つのことをしてください。
+1. この企画で使う表現候補の中から、加藤CEOに確認が必要なものを3〜5件選ぶ
+2. 加藤CEOに送る確認用ドキュメントを生成する
+
+【確認が必要な表現の選び方】
+以下の基準に当てはまる表現を優先して選んでください：
+① 業界を批判・否定的に見ているように読まれかねない表現
+  （例：昭和型・遅れている・デジタル音痴・古い慣習・取り残された）
+② 強い主張・断定的な言い回し
+  （例：〜は不可能・〜の時代は終わった・〜しなければ生き残れない）
+③ 概念ラベル系のキーワード
+  （例：民主化・革命・破壊的・ゲームチェンジャー）
+④ 過去にNGとされた表現に近い言い回し
+
+3〜5件に絞ること。多すぎると確認する側の負担になる。
+
+【その他のルール】
 - 業界を否定・見下す表現は避ける（例：「昭和的」「デジタル音痴」「遅れている」）
 - 変革・進化・可能性を前向きに表現する
 - 加藤CEO個人の言葉として自然な表現にする
-JSONのみ返してください：{"editedPlans":[{"title":"","target":"","angle":"","point":"","expressions":[{"text":"表現候補","reason":"この表現を提案する理由・文脈（必須）"}],"okExpressions":[],"ngExpressions":[],"direction":"執筆方針（1〜2文）"}]}`,
+
+JSONのみ返してください：
+{
+  "editedPlans": [{
+    "title": "",
+    "target": "",
+    "angle": "",
+    "point": "",
+    "direction": "執筆方針（1〜2文）",
+    "expressions": [
+      {
+        "text": "確認が必要な表現",
+        "context": "この表現をどの文脈・場面で使うか",
+        "checkPoint": "加藤CEOに確認したいこと"
+      }
+    ],
+    "confirmationDoc": "加藤CEOへの確認依頼文（プレーンテキスト）"
+  }]
+}
+
+confirmationDoc は以下のフォーマットで生成：
+---
+📋 企画確認依頼
+
+【企画骨子】
+タイトル案：{title}
+ターゲット：{target}
+切り口：{angle}
+伝えたい核心：{point}
+
+【使いたい表現・確認ポイント】
+（expressionsの各項目を番号付きで）
+① {text}
+　この文脈：{context}
+　確認：{checkPoint}
+
+確認のお願い：
+上記の企画でこれらの表現を使う予定です。
+各表現について「OK / NG / 言い換え案」でご確認いただけますか？
+---
+markdownは使わない。記号は①②③と・のみ。`,
           JSON.stringify(batch)
         )
         allEditedPlans.push(...(batchResult.editedPlans || []))
@@ -463,9 +530,11 @@ JSONのみ返してください：{"editedPlans":[{"title":"","target":"","angle
         ...p,
         expressions: (p.expressions || []).map((ex: any) => ({
           text: typeof ex === 'string' ? ex : ex.text,
-          reason: typeof ex === 'string' ? '' : ex.reason,
+          context: typeof ex === 'string' ? '' : (ex.context || ''),
+          checkPoint: typeof ex === 'string' ? '' : (ex.checkPoint || ''),
           judgment: ''
         })),
+        confirmationDoc: p.confirmationDoc || '',
         okExpressions: p.okExpressions || [],
         ngExpressions: p.ngExpressions || []
       }))
@@ -544,24 +613,11 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
   return (
     <div style={{ maxWidth: 820 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
         <div className="pg-title">発信コンテンツ生成</div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => syncToSheets(false)} disabled={syncing} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>
-            {syncing ? '同期中...' : '📊 上書き同期'}
-          </button>
-          <button onClick={() => syncToSheets(true)} disabled={syncing} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>
-            {syncing ? '同期中...' : '📊 追記同期'}
-          </button>
-        </div>
-      </div>
         <button onClick={() => { setShowHistory(!showHistory); fetchHistory() }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
           {showHistory ? '← 生成に戻る' : '📚 過去の企画履歴'}
         </button>
       </div>
-      {syncResult && (
-        <div style={{ fontSize: 11, color: syncResult.startsWith('✓') ? 'var(--green)' : 'var(--red)', marginBottom: 8 }}>{syncResult}</div>
-      )}
       <div className="pg-sub">企画 → 編集 → 執筆の3エージェントがMTGから発信コンテンツを自動生成します</div>
 
       {/* 履歴ビュー */}
@@ -731,28 +787,47 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>企画{i+1}: {p.title}</div>
                 <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>執筆方針</div>
                 <div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 10, lineHeight: 1.6 }}>{p.direction}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink2)', marginBottom: 6 }}>表現候補（OK/NG/保留を選択してください）</div>
-                    {(p.expressions || []).map((ex: any, j: number) => (
-                      <div key={j} style={{ background: 'var(--bg)', borderRadius: 4, padding: '6px 10px', marginBottom: 6, fontSize: 11 }}>
-                        <div style={{ marginBottom: 4, fontWeight: 500 }}>{ex.text}</div>
-                        {ex.reason && <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6 }}>{ex.reason}</div>}
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          {(['OK', 'NG', '保留'] as const).map(j2 => (
-                            <button key={j2} onClick={() => updateJudgment(i, j, j2)}
-                              style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, border: '0.5px solid var(--b1)', cursor: 'pointer', fontFamily: 'inherit',
-                                background: ex.judgment === j2 ? (j2 === 'OK' ? 'var(--green)' : j2 === 'NG' ? 'var(--red)' : 'var(--ink2)') : 'none',
-                                color: ex.judgment === j2 ? '#fff' : 'var(--ink2)'
-                              }}>{j2}</button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink2)', marginBottom: 6 }}>加藤CEOに確認が必要な表現（OK/NG/保留を選択してください）</div>
+                {(p.expressions || []).map((ex: any, j: number) => (
+                  <div key={j} style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 4, padding: '8px 10px', marginBottom: 6, fontSize: 11 }}>
+                    <div style={{ marginBottom: 4, fontWeight: 600 }}>{ex.text}</div>
+                    {ex.context && <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 3 }}>この文脈：{ex.context}</div>}
+                    {ex.checkPoint && <div style={{ fontSize: 10, color: 'var(--ink2)', marginBottom: 6 }}>確認：{ex.checkPoint}</div>}
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {(['OK', 'NG', '保留'] as const).map(j2 => (
+                        <button key={j2} onClick={() => updateJudgment(i, j, j2)}
+                          style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, border: '0.5px solid var(--b1)', cursor: 'pointer', fontFamily: 'inherit',
+                            background: ex.judgment === j2 ? (j2 === 'OK' ? 'var(--green)' : j2 === 'NG' ? 'var(--red)' : 'var(--ink2)') : 'none',
+                            color: ex.judgment === j2 ? '#fff' : 'var(--ink2)'
+                          }}>{j2}</button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ))}
+                {p.confirmationDoc && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--ink2)', letterSpacing: '0.04em' }}>📋 加藤CEO確認用ドキュメント</div>
+                      <button onClick={() => copyDoc(i, p.confirmationDoc || '')}
+                        style={{ fontSize: 10, padding: '3px 10px', borderRadius: 10, border: '0.5px solid ' + (copiedDocIdx === i ? 'var(--green)' : 'var(--b1)'), background: copiedDocIdx === i ? 'var(--gbg)' : 'var(--paper)', color: copiedDocIdx === i ? 'var(--green)' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        {copiedDocIdx === i ? '✓ コピーしました' : '📋 コピー'}
+                      </button>
+                    </div>
+                    <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 4, padding: '10px 12px', fontSize: 11, lineHeight: 1.7, color: 'var(--ink)', whiteSpace: 'pre-wrap' as const }}>{p.confirmationDoc}</div>
+                  </div>
+                )}
               </div>
             ))}
+          </div>
+          {/* 表現にOK/NGを付けた後にスプレッドシートへ同期する */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <button onClick={() => syncToSheets(false)} disabled={syncing} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>
+              {syncing ? '同期中...' : '📊 上書き同期'}
+            </button>
+            <button onClick={() => syncToSheets(true)} disabled={syncing} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>
+              {syncing ? '同期中...' : '📊 追記同期'}
+            </button>
+            {syncResult && <span style={{ fontSize: 11, color: syncResult.startsWith('✓') ? 'var(--green)' : 'var(--red)' }}>{syncResult}</span>}
           </div>
           {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
