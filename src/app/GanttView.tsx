@@ -104,6 +104,9 @@ interface Props {
 
 const CW = 48
 
+// 改行を <br> に変換して表示（markdownライブラリは使わない）
+const renderLines = (text: string) => text.split('\n').map((line, i) => <span key={i}>{line}<br /></span>)
+
 export default function GanttView({ tasks: propTasks, members, onTasksChange, onEditTask }: Props) {
   const [tasks, setTasks] = useState<Task[]>(propTasks || defaultTasks)
   const [filterStatus, setFilterStatus] = useState('all')
@@ -205,9 +208,9 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
       }
 
       const classified = {
-        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: owner(t), 期限: t.e, 備考: t.備考 || '' })),
-        進行中_今週来週: upcomingDoing.map(t => ({ name: t.name, assignee: owner(t), 期限: t.e })),
-        遅延: overdue.map(t => ({ name: t.name, assignee: owner(t), 期限: t.e })),
+        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e, 備考: t.備考 || '' })),
+        進行中_今週来週: upcomingDoing.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e })),
+        遅延: overdue.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e })),
       }
 
       const prompt = `以下のタスクをもとに週次定例MTGのアジェンダを作成してください。
@@ -216,28 +219,29 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
 タスク一覧（JSON）：
 ${JSON.stringify(classified, null, 2)}
 
-必ずこの形式で出力すること：
+出力ルール：
+・markdown記号（**、##、- など）は一切使わない。
+・箇条書きは「・」を使う。見出しは数字と日本語のみ。
+・担当者名を各項目に含める。
+・対象タスクが0件のセクションは省略する。
+・タスク名は省略せず全文で出力する。
+
+以下の構成で出力すること：
 
 📋 週次定例アジェンダ（${today}）
 
-## 1. 定例確認・要判断
-定例確認ステータスのタスクを列挙。
-備考（FBメモ）がある場合はタスク名の下にインデントして表示。
-このセクションが会議の最優先議題。
+1. 今日決めたいこと・確認してほしいこと
+JSONの「定例確認」のタスクのみを列挙する。
+各項目に「← 何をしてほしいか」を1行で添える（例：← 方向性を承認してほしい / ← 期限変更の判断をお願いしたい）。
+備考に [定例FB 日付] の形式でFB内容がある場合は「← 前回MTG(日付)：FBの内容」も添える。
 
-## 2. 進行中・今週の確認
-期限が直近のタスクの進捗確認。担当者名を含めること。
+2. SAMURAIさん側に動いてほしいこと
+担当チームがSAMURAIのタスク、またはSAMURAIの確認・返答が必要なタスクを列挙する。
+各項目に期限と「← 何をしてほしいか」を添える。
 
-## 3. 遅延・注意
-期限切れタスクがあれば列挙。なければこのセクションを省略。
-
-- タスク名は省略せず全文で出力
-- 担当者名を各タスクに含める
-- 対象タスクが0件のセクションは省略
-
-定例確認タスクの備考フィールドに [定例FB 日付] の形式でFB内容が記録されている場合、
-そのタスクのアジェンダ項目に出典を付けること。
-出典の形式：← 前回MTG(日付)：FBの内容`
+3. THE MOLTS側の進捗報告
+担当チームがTHE MOLTSで進行中のタスクを列挙する。一言で状況を添える。
+期限が今週・来週のものに絞る。`
 
       // c. Claude に送信
       const aiRes = await fetch('/api/claude', {
@@ -513,7 +517,7 @@ ${JSON.stringify(classified, null, 2)}
           </div>
           {confirmError && <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--red)' }}>{confirmError}</div>}
           {agendaOpen && (
-            <div style={{ padding: '14px 16px', fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{agenda}</div>
+            <div style={{ padding: '14px 16px', fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', fontFamily: 'inherit' }}>{renderLines(agenda)}</div>
           )}
         </div>
       )}
@@ -530,7 +534,7 @@ ${JSON.stringify(classified, null, 2)}
                 <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--ink)' }}>{a.title}</span>
               </div>
               {expandedAgenda === a.id && (
-                <div style={{ padding: '0 16px 14px', fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{a.content}</div>
+                <div style={{ padding: '0 16px 14px', fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', fontFamily: 'inherit' }}>{renderLines(a.content)}</div>
               )}
             </div>
           ))}

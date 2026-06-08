@@ -9,6 +9,9 @@ interface ReviewDisplay { name: string; oldLabel: string; newLabel: string; outc
 
 const ownerName = (t: Task) => t.assignee || (t.own === 'molts' ? 'THE MOLTS' : t.own === 'samurai' ? 'SAMURAI' : '共同')
 
+// 改行を <br> に変換して表示（markdownライブラリは使わない）
+const renderLines = (text: string) => text.split('\n').map((line, i) => <span key={i}>{line}<br /></span>)
+
 const stLabel: Record<TaskStatus, string> = {
   todo: '未着手', doing: '進行中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
 }
@@ -340,9 +343,10 @@ JSONのみ返してください：
         return
       }
 
+      const teamName = (t: Task) => t.own === 'molts' ? 'THE MOLTS' : t.own === 'samurai' ? 'SAMURAI' : '共同'
       const combined = {
-        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: ownerName(t), 期限: t.e, 備考: t.備考 || '' })),
-        今週来週: upcoming.map(t => ({ name: t.name, assignee: ownerName(t), 期限: t.e })),
+        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: ownerName(t), 担当チーム: teamName(t), 期限: t.e, 備考: t.備考 || '' })),
+        今週来週: upcoming.map(t => ({ name: t.name, assignee: ownerName(t), 担当チーム: teamName(t), 期限: t.e })),
       }
 
       const prompt = `以下のタスクをもとに次回週次定例MTGのアジェンダを作成してください。
@@ -350,16 +354,29 @@ JSONのみ返してください：
 
 タスク一覧（JSON）：${JSON.stringify(combined, null, 2)}
 
-出力形式：
+出力ルール：
+・markdown記号（**、##、- など）は一切使わない。
+・箇条書きは「・」を使う。見出しは数字と日本語のみ。
+・担当者名を各項目に含める。
+・対象タスクが0件のセクションは省略する。
+・タスク名は省略せず全文で出力する。
+
+以下の構成で出力すること：
+
 📋 次回定例アジェンダ（案）（${today}）
 
-## 1. 定例確認・要判断
-定例確認ステータスのタスクを列挙。備考（FBメモ）があれば表示。
+1. 今日決めたいこと・確認してほしいこと
+JSONの「定例確認」のタスクのみを列挙する。
+各項目に「← 何をしてほしいか」を1行で添える（例：← 方向性を承認してほしい / ← 期限変更の判断をお願いしたい）。
+備考に [定例FB 日付] の形式でFB内容がある場合は「← 前回MTG(日付)：FBの内容」も添える。
 
-## 2. 今週・来週の確認
-期日が近いタスクを担当者付きで列挙。
+2. SAMURAIさん側に動いてほしいこと
+担当チームがSAMURAIのタスク、またはSAMURAIの確認・返答が必要なタスクを列挙する。
+各項目に期限と「← 何をしてほしいか」を添える。
 
-タスク名は省略せず全文。0件のセクションは省略。`
+3. THE MOLTS側の進捗報告
+担当チームがTHE MOLTSで進行中のタスクを列挙する。一言で状況を添える。
+期限が今週・来週のものに絞る。`
 
       const aiRes = await fetch('/api/claude', {
         method: 'POST',
@@ -444,7 +461,7 @@ JSONのみ返してください：
               </div>
               {agendaMessage
                 ? <div style={{ padding: '12px 14px', background: 'var(--bg)', border: '0.5px solid var(--b1)', borderRadius: 6, fontSize: 12, color: 'var(--muted)' }}>{agendaMessage}</div>
-                : <div style={{ padding: '14px 16px', background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', whiteSpace: 'pre-wrap' }}>{agenda}</div>}
+                : <div style={{ padding: '14px 16px', background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, fontSize: 12, lineHeight: 1.7, color: 'var(--ink)' }}>{renderLines(agenda || '')}</div>}
             </div>
           )}
         </div>
