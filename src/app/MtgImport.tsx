@@ -343,6 +343,12 @@ JSONのみ返してください：
         return
       }
 
+      // メンバー一覧を取得（SAMURAI/THE MOLTS 振り分けに利用）
+      const mRes = await fetch('/api/members')
+      const mData = await mRes.json().catch(() => ({}))
+      const samuraiMembers = (mData?.samurai || []).join('、')
+      const moltsMembers = (mData?.molts || []).join('、')
+
       const teamName = (t: Task) => t.own === 'molts' ? 'THE MOLTS' : t.own === 'samurai' ? 'SAMURAI' : '共同'
       const combined = {
         定例確認: reviewTasks.map(t => ({ name: t.name, assignee: ownerName(t), 担当チーム: teamName(t), 期限: t.e, 備考: t.備考 || '' })),
@@ -351,6 +357,9 @@ JSONのみ返してください：
 
       const prompt = `以下のタスクをもとに次回週次定例MTGのアジェンダを作成してください。
 今日の日付：${today}
+
+SAMURAIメンバー名一覧：${samuraiMembers || '（未登録）'}
+THE MOLTSメンバー名一覧：${moltsMembers || '（未登録）'}
 
 タスク一覧（JSON）：${JSON.stringify(combined, null, 2)}
 
@@ -371,11 +380,14 @@ JSONの「定例確認」のタスクのみを列挙する。
 備考に [定例FB 日付] の形式でFB内容がある場合は「← 前回MTG(日付)：FBの内容」も添える。
 
 2. SAMURAIさん側に動いてほしいこと
-担当チームがSAMURAIのタスク、またはSAMURAIの確認・返答が必要なタスクを列挙する。
+担当者がSAMURAIメンバー名一覧に含まれるタスク、またはSAMURAIの確認・返答が必要なタスクを列挙する。
+担当者が不明な場合はタスク名の文脈で判断する。
 各項目に期限と「← 何をしてほしいか」を添える。
 
 3. THE MOLTS側の進捗報告
-担当チームがTHE MOLTSで進行中のタスクを列挙する。一言で状況を添える。
+担当者がTHE MOLTSメンバー名一覧に含まれるタスクで進行中のものを列挙する。
+担当者が不明な場合はタスク名の文脈で判断する。
+このセクションでは「←」は使わない。各タスクには「状況：〇〇が進行中」程度の一言だけを添える。
 期限が今週・来週のものに絞る。`
 
       const aiRes = await fetch('/api/claude', {

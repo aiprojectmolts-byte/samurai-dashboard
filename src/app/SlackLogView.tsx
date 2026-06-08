@@ -20,6 +20,10 @@ export default function SlackLogView({ members: _members }: Props) {
   const [extractResult, setExtractResult] = useState('')
   const [savingKnowledge, setSavingKnowledge] = useState(false)
   const [knowledgeResult, setKnowledgeResult] = useState('')
+  const [extractingTasks, setExtractingTasks] = useState(false)
+  const [taskCandidates, setTaskCandidates] = useState<any[] | null>(null)
+  const [addedTasks, setAddedTasks] = useState<Set<number>>(new Set())
+  const [taskMsg, setTaskMsg] = useState('')
 
   useEffect(() => {
     fetch('/api/slack-logs').then(r => r.json()).then(data => {
@@ -175,6 +179,74 @@ ${recentLogs.slice(0, 5000)}`
     }
     setSavingKnowledge(false)
   }
+  const extractTasks = async () => {
+    if (logs.length === 0) return
+    setExtractingTasks(true)
+    setTaskMsg('')
+    setTaskCandidates(null)
+    setAddedTasks(new Set())
+    try {
+      const recentLogs = logs.slice(0, 100).map(l => `${l.user}: ${l.text}`).join('\n')
+      const aiRes = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1500,
+          messages: [{
+            role: 'user',
+            content: `以下のSlackメッセージから、タスクとして追加すべきアクションアイテムを抽出してください。
+「〇〇をお願いします」「確認してください」「対応お願い」などの依頼・アクション表現を探してください。
+
+JSONのみ返してください：
+{"tasks": [{"name": "タスク名（具体的に）", "assignee": "担当者名（あれば）", "deadline": "YYYY-MM-DD（なければ空文字）", "category": "推定カテゴリ（なければ空文字）"}]}
+タスクが見当たらない場合は {"tasks": []} を返してください。
+
+Slackメッセージ：${recentLogs.slice(0, 5000)}`
+          }]
+        })
+      })
+      const aiData = await aiRes.json()
+      const aiText = aiData.content?.[0]?.text || '{}'
+      let result: any = { tasks: [] }
+      try { result = JSON.parse(aiText.replace(/```json|```/g, '').trim()) } catch {}
+      const tasks = Array.isArray(result.tasks) ? result.tasks : []
+      if (tasks.length === 0) {
+        setTaskCandidates([])
+        setTaskMsg('タスクが見つかりませんでした')
+      } else {
+        setTaskCandidates(tasks)
+      }
+    } catch (e) {
+      setTaskMsg('抽出に失敗しました')
+    }
+    setExtractingTasks(false)
+  }
+
+  const addTask = async (cand: any, idx: number) => {
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const newTask = {
+        id: Date.now().toString() + Math.random().toString(36).slice(2),
+        施策: cand.category || '未分類',
+        name: cand.name,
+        s: today,
+        e: cand.deadline || '',
+        own: 'both',
+        st: 'todo',
+        chg: false,
+        assignee: cand.assignee || '',
+        blocker: false,
+        src: 'slack',
+      }
+      const existRes = await fetch('/api/tasks')
+      const existing = await existRes.json()
+      const newList = Array.isArray(existing) ? [...existing, newTask] : [newTask]
+      await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newList) })
+      setAddedTasks(s => new Set(s).add(idx))
+    } catch {}
+  }
+
   const formatDate = (ts: string) => {
     const d = new Date(parseFloat(ts) * 1000)
     return d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) + ' ' +
@@ -192,8 +264,38 @@ ${recentLogs.slice(0, 5000)}`
           <button onClick={extractToKnowledge} disabled={savingKnowledge || loading} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: savingKnowledge ? 'var(--b1)' : 'var(--paper)', color: savingKnowledge ? 'var(--muted)' : 'var(--ink)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
             {savingKnowledge ? '抽出中...' : '📚 ナレッジに追加'}
           </button>
+          <button onClick={extractTasks} disabled={extractingTasks || loading} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: extractingTasks ? 'var(--b1)' : 'var(--paper)', color: extractingTasks ? 'var(--muted)' : 'var(--ink)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+            {extractingTasks ? '抽出中...' : '📋 タスクを抽出'}
+          </button>
         </div>
       </div>
+
+      {taskMsg && (
+        <div style={{ margin: '8px 14px', background: 'var(--bg)', border: '0.5px solid var(--b1)', borderRadius: 6, padding: 10, fontSize: 11, color: 'var(--muted)' }}>
+          {taskMsg}
+        </div>
+      )}
+      {taskCandidates && taskCandidates.length > 0 && (
+        <div style={{ margin: '8px 14px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>抽出されたタスク候補（{taskCandidates.length}件）</div>
+          {taskCandidates.map((c, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '0.5px solid var(--b1)', borderRadius: 6, marginBottom: 4, background: 'var(--paper)' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--ink)' }}>{c.name}</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {c.assignee && <span>担当: {c.assignee}</span>}
+                  {c.deadline && <span>期限: {c.deadline}</span>}
+                  {c.category && <span>{c.category}</span>}
+                </div>
+              </div>
+              <button onClick={() => addTask(c, i)} disabled={addedTasks.has(i)}
+                style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid ' + (addedTasks.has(i) ? 'var(--green)' : 'var(--b1)'), borderRadius: 20, background: addedTasks.has(i) ? 'var(--gbg)' : 'var(--ink)', color: addedTasks.has(i) ? 'var(--green)' : '#fff', cursor: addedTasks.has(i) ? 'default' : 'pointer', fontFamily: 'inherit', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                {addedTasks.has(i) ? '✓ 追加済み' : '+ タスクに追加'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       {knowledgeResult && (
         <div style={{ margin: '8px 14px', background: 'var(--bbg)', border: '0.5px solid var(--blue)', borderRadius: 6, padding: 10, fontSize: 11, whiteSpace: 'pre-wrap' as const, color: 'var(--ink2)' }}>
           {knowledgeResult}
