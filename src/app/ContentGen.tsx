@@ -61,7 +61,20 @@ const PROMPT_GENERAL = `このドキュメントの要点を構造化してま�
 const safeText = (v: any): string =>
   v == null ? '' : Array.isArray(v) ? v.map((x: any) => (typeof x === 'string' ? x : (x?.text || x?.heading || ''))).filter(Boolean).join('\n') : (typeof v === 'string' ? v : String(v))
 const safeArr = (v: any): any[] => (Array.isArray(v) ? v : [])
-const safeBullets = (v: any): string[] => safeText(v).split(/\n|・/).map(s => s.trim()).filter(Boolean)
+const safeBullets = (v: any): string[] => {
+  const PH = ''
+  // 括弧（全角・半角）内の「・」は分割対象外にするため一時退避
+  let depth = 0, masked = ''
+  for (const ch of safeText(v)) {
+    if (ch === '（' || ch === '(') { depth++; masked += ch }
+    else if (ch === '）' || ch === ')') { depth = Math.max(0, depth - 1); masked += ch }
+    else masked += (ch === '・' && depth > 0) ? PH : ch
+  }
+  return masked.split(/\n|・/)
+    .map(s => s.split(PH).join('・').trim())   // 退避した「・」を戻す
+    .map(s => s.replace(/^【[^】]*】\s*/, '').trim())  // 先頭の【ラベル】を除去
+    .filter(Boolean)
+}
 
 export default function ContentGen() {
   const [text, setText] = useState('')
