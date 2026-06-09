@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 
-type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
+type TaskStatus = 'todo' | 'doing' | 'thread-review' | 'review' | 'done' | 'waiting' | 'delayed'
 
 interface Task {
   id?: string
@@ -21,6 +21,7 @@ interface Task {
   背景?: string
   背景ソース?: string
   phase?: string
+  threadUrl?: string
 }
 
 const defaultTasks: Task[] = [
@@ -40,7 +41,7 @@ const defaultTasks: Task[] = [
 ]
 
 const statusLabel: Record<TaskStatus, string> = {
-  todo: '未着手', doing: '進行中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
+  todo: '未着手', doing: '進行中', 'thread-review': 'スレッド確認中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
 }
 
 const ownerLabel = { molts: 'THE MOLTS', samurai: 'SAMURAI', both: '共同' }
@@ -49,6 +50,7 @@ const ownerClass = { molts: 'ob-m', samurai: 'ob-s', both: 'ob-b' }
 const barColor: Record<TaskStatus, string> = {
   todo: '#b0b8c4',
   doing: '#f59e0b',
+  'thread-review': '#8b5cf6',
   review: '#3b82f6',
   done: '#4ade80',
   waiting: '#f87171',
@@ -436,9 +438,9 @@ markdownは使わない。記号は・と①②③のみ。
         <div style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>ステータス</span>
-            {['all', 'doing', 'review', 'waiting', 'delayed', 'todo', 'done'].map(s => (
+            {['all', 'doing', 'thread-review', 'review', 'waiting', 'delayed', 'todo', 'done'].map(s => (
               <button key={s} onClick={() => setFilterStatus(s)} style={fbtn(filterStatus === s)}>
-                {s === 'all' ? 'すべて' : s === 'doing' ? '進行中' : s === 'review' ? '定例確認' : s === 'waiting' ? '対応待ち' : s === 'delayed' ? '遅れあり' : s === 'todo' ? '未着手' : '完了'}
+                {s === 'all' ? 'すべて' : s === 'doing' ? '進行中' : s === 'thread-review' ? 'スレッド確認中' : s === 'review' ? '定例確認' : s === 'waiting' ? '対応待ち' : s === 'delayed' ? '遅れあり' : s === 'todo' ? '未着手' : '完了'}
               </button>
             ))}
           </div>
@@ -520,7 +522,7 @@ markdownは使わない。記号は・と①②③のみ。
                       const groupS = groupTasks.reduce((min, t) => t.s < min ? t.s : min, groupTasks[0].s)
                       const groupE = groupTasks.reduce((max, t) => t.e > max ? t.e : max, groupTasks[0].e)
                       const groupSt = groupTasks.reduce((worst, t) => {
-                        const p: Record<TaskStatus, number> = { waiting: 6, delayed: 5, doing: 4, review: 3, todo: 2, done: 1 }
+                        const p: Record<TaskStatus, number> = { waiting: 7, delayed: 6, doing: 5, 'thread-review': 4, review: 3, todo: 2, done: 1 }
                         return p[t.st] > p[worst] ? t.st : worst
                       }, 'done' as TaskStatus)
 
@@ -547,6 +549,7 @@ markdownは使わない。記号は・と①②③のみ。
                                     <span className="t-name" title={t.name} onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span>
                                     {t.st === 'delayed' && <span className="delay-tag">遅れあり</span>}
                                     {t.chg && <span className="delay-tag">変更</span>}
+                                    {t.st === 'thread-review' && t.threadUrl && <a href={t.threadUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 9, background: '#f5f3ff', color: '#6d28d9', padding: '1px 5px', borderRadius: 3, fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>🔗 スレッド</a>}
                                   </div>
                                   {t.背景 && (
                                     <div style={{ paddingLeft: 32, marginTop: 2 }}>

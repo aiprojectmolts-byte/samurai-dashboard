@@ -15,7 +15,7 @@ import PhaseSettings from './PhaseSettings'
 
 import { useState, useEffect } from 'react'
 
-type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
+type TaskStatus = 'todo' | 'doing' | 'thread-review' | 'review' | 'done' | 'waiting' | 'delayed'
 
 interface Task {
   id?: string
@@ -34,6 +34,7 @@ interface Task {
   背景?: string
   背景ソース?: string
   phase?: string
+  threadUrl?: string
 }
 
 const defaultTasks: Task[] = [
@@ -53,7 +54,7 @@ const defaultTasks: Task[] = [
 ]
 
 const statusLabel: Record<TaskStatus, string> = {
-  todo: '未着手', doing: '進行中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
+  todo: '未着手', doing: '進行中', 'thread-review': 'スレッド確認中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
 }
 
 const ownerLabel = { molts: 'THE MOLTS', samurai: 'SAMURAI', both: '共同' }

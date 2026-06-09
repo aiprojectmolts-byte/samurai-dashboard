@@ -2,13 +2,13 @@
 import { useState, useEffect } from 'react'
 import type { CSSProperties } from 'react'
 
-type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
+type TaskStatus = 'todo' | 'doing' | 'thread-review' | 'review' | 'done' | 'waiting' | 'delayed'
 
 interface Task {
   id?: string
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
-  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string
+  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string; threadUrl?: string
 }
 
 interface Members { samurai: string[]; molts: string[] }
@@ -109,12 +109,20 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
             <select value={form.st} onChange={e => set('st', e.target.value as TaskStatus)} style={inp}>
               <option value="todo">予定</option>
               <option value="doing">進行中</option>
+              <option value="thread-review">スレッド確認中</option>
               <option value="review">定例確認</option>
               <option value="waiting">着手待ち</option>
               <option value="delayed">遅延</option>
               <option value="done">完了</option>
             </select>
           </label>
+
+          {form.st === 'thread-review' && (
+            <label style={lbl}>
+              Slackスレッドの URL
+              <input value={form.threadUrl ?? ''} onChange={e => set('threadUrl', e.target.value)} style={inp} placeholder="https://〜.slack.com/archives/..." />
+            </label>
+          )}
 
           <label style={lbl}>
             ソース

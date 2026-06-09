@@ -1,12 +1,12 @@
 'use client'
 import { useState } from 'react'
 
-type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
+type TaskStatus = 'todo' | 'doing' | 'thread-review' | 'review' | 'done' | 'waiting' | 'delayed'
 interface Task {
   id?: string
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
-  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string
+  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string; threadUrl?: string
 }
 interface Members { samurai: string[]; molts: string[] }
 interface Props {
@@ -18,7 +18,7 @@ interface Props {
 }
 
 const statusLabel: Record<TaskStatus, string> = {
-  todo: '未着手', doing: '進行中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
+  todo: '未着手', doing: '進行中', 'thread-review': 'スレッド確認中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり'
 }
 // 一括変更で選べるステータス
 const bulkStatusOptions: [TaskStatus, string][] = [['todo', '未着手'], ['doing', '進行中'], ['review', '定例確認'], ['done', '完了']]
@@ -144,6 +144,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
             {due && <span style={{ fontSize: 10, fontWeight: 500, color: due.color }}>{due.date} ({due.text})</span>}
             {t.src === 'slack' && <span style={{ fontSize: 9, background: '#eff6ff', color: '#1d4ed8', padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>Slack</span>}
             {t.src && t.src !== 'slack' && <span style={{ fontSize: 9, background: '#fef9c3', color: '#854d0e', padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>📋 {t.src.replace(/^\d{4}-\d{2}-\d{2}\s*/, '')}</span>}
+            {t.st === 'thread-review' && t.threadUrl && <a href={t.threadUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 9, background: '#f5f3ff', color: '#6d28d9', padding: '1px 6px', borderRadius: 3, fontWeight: 600, textDecoration: 'none' }}>🔗 スレッドを開く</a>}
           </div>
           {t.impact && <div className="id">{t.impact}</div>}
           {t.背景 && (
@@ -181,9 +182,9 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>ステータス</span>
-          {['all', 'doing', 'review', 'waiting', 'delayed', 'todo', 'done'].map(s => (
+          {['all', 'doing', 'thread-review', 'review', 'waiting', 'delayed', 'todo', 'done'].map(s => (
             <button key={s} onClick={() => setFilterStatus(s)} style={fbtn(filterStatus === s)}>
-              {s === 'all' ? 'すべて' : s === 'doing' ? '進行中' : s === 'review' ? '定例確認' : s === 'waiting' ? '対応待ち' : s === 'delayed' ? '遅れあり' : s === 'todo' ? '未着手' : '完了'}
+              {s === 'all' ? 'すべて' : s === 'doing' ? '進行中' : s === 'thread-review' ? 'スレッド確認中' : s === 'review' ? '定例確認' : s === 'waiting' ? '対応待ち' : s === 'delayed' ? '遅れあり' : s === 'todo' ? '未着手' : '完了'}
             </button>
           ))}
         </div>
