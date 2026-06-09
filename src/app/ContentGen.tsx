@@ -1,6 +1,6 @@
 'use client'
 import ReactMarkdown from 'react-markdown'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx'
 import { saveAs } from 'file-saver'
 
@@ -68,6 +68,7 @@ export default function ContentGen() {
   const [step, setStep] = useState<'input'|'planning'|'structure'|'editing'|'writing'|'done'>('input')
   const [plans, setPlans] = useState<Plan[]>([])
   const [structuredPlans, setStructuredPlans] = useState<Plan[]>([])
+  const [isRenderError, setIsRenderError] = useState(false)
   const [editedPlans, setEditedPlans] = useState<EditedPlan[]>([])
   const [results, setResults] = useState<FinalResult[]>([])
   const [selectedResult, setSelectedResult] = useState(0)
@@ -582,18 +583,40 @@ ${sanitizedCompetitive}` : ''}`
     }
   }
 
-  // STEP2: 編集エージェント
+  // 構成プランをレンダリング安全な形に正規化（配列/オブジェクト混入を文字列・配列に矯正）
+  const normalizeStructuredPlan = (p: any): Plan => ({
+    ...(p && typeof p === 'object' && !Array.isArray(p) ? p : {}),
+    title: safeText(p?.title),
+    target: safeText(p?.target),
+    angle: safeText(p?.angle),
+    point: safeText(p?.point),
+    needsManifest: safeText(p?.needsManifest),
+    needsLatent: safeText(p?.needsLatent),
+    userGoal: safeText(p?.userGoal),
+    story: safeText(p?.story),
+    outline: safeArr(p?.outline).map((o: any) =>
+      typeof o === 'string'
+        ? { heading: o, subheadings: [] as string[] }
+        : { heading: safeText(o?.heading), subheadings: safeArr(o?.subheadings).map((s: any) => safeText(s)), description: safeText(o?.description) }
+    ),
+  })
+
   // STEP2: 構成エージェント
   const runStructure = async (sourcePlans?: Plan[]) => {
-    setError(''); setLoading(true); setStep('structure')
+    setError(''); setLoading(true); setStep('structure'); setIsRenderError(false)
     const selectedPlans = sourcePlans ?? plans.filter((_, i) => selectedPlanIndices.has(i))
     try {
       const batchSize = 3
       const all: any[] = []
       for (let i = 0; i < selectedPlans.length; i += batchSize) {
         const batch = selectedPlans.slice(i, i + batchSize)
-        const batchResult = await callClaude(
-          `あなたはSAMURAI ARCHITECTSのコンテンツ構成担当AIです。
+        const res = await fetch('/api/claude', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 2000,
+            system: `あなたはSAMURAI ARCHITECTSのコンテンツ構成担当AIです。
 以下の企画骨子をもとに記事の構成を設計してください。
 
 ・顕在ニーズ：読者が検索・調べる時に意識しているニーズ
@@ -616,20 +639,28 @@ JSONのみ返してください：
 }]}
 
 企画骨子：${JSON.stringify(batch)}`,
-          JSON.stringify(batch)
-        )
-        all.push(...(batchResult.structuredPlans || []))
+            messages: [{ role: 'user', content: JSON.stringify(batch) }]
+          })
+        })
+        const data = await res.json().catch(() => ({}))
+        const rawText = data?.content?.find((c: any) => c?.type === 'text')?.text || ''
+        console.log('[runStructure] raw response:', typeof rawText === 'string' ? rawText.slice(0, 2000) : rawText)
+        let parsed: any = null
+        try { parsed = JSON.parse(String(rawText).replace(/```json|```/g, '').trim()) }
+        catch (pe) { console.error('[runStructure] JSON parse error:', pe, 'raw:', rawText) }
+        if (parsed && Array.isArray(parsed.structuredPlans)) all.push(...parsed.structuredPlans)
       }
-      // 構成フィールドを元の企画にマージ（タイトルで照合）
+      // 構成フィールドを元の企画にマージ（タイトルで照合）し、必ず正規化してからセット
       const merged: Plan[] = selectedPlans.map(p => {
         const s = all.find((x: any) => x && x.title === p.title) || {}
-        return { ...p, needsManifest: safeText(s.needsManifest), needsLatent: safeText(s.needsLatent), userGoal: safeText(s.userGoal), story: safeText(s.story), outline: safeArr(s.outline) }
+        return normalizeStructuredPlan({ ...p, needsManifest: s.needsManifest, needsLatent: s.needsLatent, userGoal: s.userGoal, story: s.story, outline: s.outline })
       })
       setStructuredPlans(merged)
     } catch (e) {
       // 失敗時は構成ステップに留まり、構成なしの生プランで編集へスキップできるようにする
+      console.error('[runStructure] error:', e)
       setError('構成生成に失敗しました。構成なしのまま編集へ進むこともできます。')
-      setStructuredPlans(selectedPlans)
+      setStructuredPlans(selectedPlans.map(normalizeStructuredPlan))
     } finally {
       setLoading(false)
     }
@@ -813,6 +844,21 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
 
   const r = results[selectedResult]
 
+  // 構成ステップ表示前に structuredPlans の健全性を検証。問題があれば描画せずエラー表示に切り替える
+  useEffect(() => {
+    if (step !== 'structure') { setIsRenderError(false); return }
+    try {
+      structuredPlans.forEach(p => {
+        safeBullets(p.needsManifest); safeBullets(p.needsLatent); safeText(p.userGoal); safeBullets(p.story)
+        safeArr(p.outline).forEach((o: any) => { safeText(typeof o === 'string' ? o : o?.heading); safeArr(typeof o === 'string' ? [] : o?.subheadings) })
+      })
+      setIsRenderError(false)
+    } catch (e) {
+      console.error('[structure] render validation error:', e)
+      setIsRenderError(true)
+    }
+  }, [structuredPlans, step])
+
   return (
     <div style={{ maxWidth: 820 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -870,7 +916,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
               setSelectedPlanIndices(new Set(picked.map((_, i) => i)))
               // 旧スキーマ（構成フィールドなし）は自動で構成生成。構成済みならそのまま表示
               const hasStructure = picked.length > 0 && picked.every(p => p.needsManifest || p.needsLatent || (Array.isArray(p.outline) && p.outline.length > 0))
-              if (hasStructure) { setStructuredPlans(picked); setStep('structure') }
+              if (hasStructure) { setIsRenderError(false); setStructuredPlans(picked.map(normalizeStructuredPlan)); setStep('structure') }
               else { runStructure(picked) }
             }}
             style={{ width: '100%', padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -997,7 +1043,16 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
       )}
 
       {/* STEP: 構成結果 */}
-      {step === 'structure' && !loading && structuredPlans.length > 0 && (
+      {step === 'structure' && !loading && (
+        isRenderError ? (
+          <div>
+            <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16, marginBottom: 12, fontSize: 12, color: 'var(--red)' }}>構成の表示に失敗しました。編集エージェントへスキップできます。</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setStep('planning')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← 企画に戻る</button>
+              <button onClick={runEditing} disabled={loading} style={{ flex: 1, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✍️ 編集エージェントへスキップ</button>
+            </div>
+          </div>
+        ) : structuredPlans.length > 0 ? (
         <div>
           <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16, marginBottom: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 12 }}>構成エージェントの出力</div>
@@ -1074,6 +1129,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             </button>
           </div>
         </div>
+        ) : null
       )}
 
       {/* STEP3: 編集結果 */}
