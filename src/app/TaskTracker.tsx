@@ -15,6 +15,7 @@ interface Props {
   onStatusChange: (idx: number, st: string) => void
   onBulkStatusChange: (names: string[], st: string) => void
   onOpenModal: (task: Task | null) => void
+  onDelete: (task: Task) => void
 }
 
 const statusLabel: Record<TaskStatus, string> = {
@@ -44,7 +45,8 @@ const deadlineGroupLabel: Record<DeadlineGroup, string> = {
   '期限切れ': '📛 期限切れ', '今日': '📅 今日', '今週': '📅 今週', '来週': '📅 来週', 'それ以降': '📅 それ以降', '期日なし': '📋 期日なし'
 }
 
-export default function TaskTracker({ tasks, members, onStatusChange, onBulkStatusChange, onOpenModal }: Props) {
+export default function TaskTracker({ tasks, members, onStatusChange, onBulkStatusChange, onOpenModal, onDelete }: Props) {
+  const confirmDelete = (t: Task) => { if (window.confirm(`このタスクを削除しますか？\n「${t.name}」`)) onDelete(t) }
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterAssignee, setFilterAssignee] = useState('all')
   const [sortBy, setSortBy] = useState('registered')
@@ -162,6 +164,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
             <option key={val} value={val}>{lbl}</option>
           ))}
         </select>
+        <button onClick={() => confirmDelete(t)} title="削除" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '2px 4px', color: 'var(--muted)', flexShrink: 0 }}>🗑</button>
       </div>
     )
   }

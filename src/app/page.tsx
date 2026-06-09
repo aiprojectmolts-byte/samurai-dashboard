@@ -108,7 +108,7 @@ export default function Dashboard() {
   }
 
   const deleteTask = async (task: Task) => {
-    const updated = tasks.filter(t => t.name !== task.name)
+    const updated = tasks.filter(t => (t.id ?? t.name) !== (task.id ?? task.name))
     setTasks(updated)
     await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
   }
@@ -411,7 +411,7 @@ export default function Dashboard() {
             )}
 
             {/* タスクトラッカー */}
-            {view === 'tasks' && <TaskTracker tasks={tasks} members={members} onStatusChange={(idx, st) => updateTaskStatus(idx, st as any)} onBulkStatusChange={(names, st) => bulkUpdateStatus(names, st as any)} onOpenModal={(t) => setModalTask(t)} />}
+            {view === 'tasks' && <TaskTracker tasks={tasks} members={members} onStatusChange={(idx, st) => updateTaskStatus(idx, st as any)} onBulkStatusChange={(names, st) => bulkUpdateStatus(names, st as any)} onOpenModal={(t) => setModalTask(t)} onDelete={deleteTask} />}
             {view === 'kpi' && <KpiView />}
             {view === 'settings' && (
               <div>

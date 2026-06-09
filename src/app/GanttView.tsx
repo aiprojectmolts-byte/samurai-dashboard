@@ -198,6 +198,13 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
     updateStatus(taskName, t.st === 'done' ? 'doing' : 'done')
   }
 
+  const deleteTask = (t: Task) => {
+    if (!window.confirm(`このタスクを削除しますか？\n「${t.name}」`)) return
+    const updated = tasks.filter(x => (x.id ?? x.name) !== (t.id ?? t.name))
+    setTasks(updated)
+    onTasksChange?.(updated)
+  }
+
   const generateAgenda = async () => {
     setAgendaLoading(true)
     setCopied(false)
@@ -401,11 +408,11 @@ markdownは使わない。記号は・と①②③のみ。
         .t-check.done { background: var(--green); border-color: var(--green); }
         .t-name { font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px; color: var(--ink); }
         .delay-tag { font-size: 9px; color: var(--orange); background: var(--obg); padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
-        .owner-cell { padding: 4px 8px; border-left: 0.5px solid var(--b1); white-space: nowrap; position: sticky; right: 80px; z-index: 9; min-width: 80px; }
+        .owner-cell { padding: 4px 8px; border-left: 0.5px solid var(--b1); white-space: nowrap; position: sticky; right: 108px; z-index: 9; min-width: 80px; }
         .g-group .owner-cell { background: #fafaf9; }
         .g-row .owner-cell { background: var(--paper); }
         .g-row:hover .owner-cell { background: #fafaf9; }
-        .action-cell { padding: 4px 6px; white-space: nowrap; position: sticky; right: 0; z-index: 9; border-left: 0.5px solid var(--b1); min-width: 80px; }
+        .action-cell { padding: 4px 6px; white-space: nowrap; position: sticky; right: 0; z-index: 9; border-left: 0.5px solid var(--b1); min-width: 108px; }
         .g-group .action-cell { background: #fafaf9; }
         .g-row .action-cell { background: var(--paper); }
         .g-row:hover .action-cell { background: #fafaf9; }
@@ -475,15 +482,15 @@ markdownは使わない。記号は・と①②③のみ。
                 {monthGroups.map(m => (
                   <th key={m.label} colSpan={m.count} style={{ borderLeft: '0.5px solid var(--b1)' }}>{m.label}</th>
                 ))}
-                <th style={{ minWidth: 80, borderLeft: '0.5px solid var(--b1)', background: '#fafaf9', position: 'sticky', right: 80, zIndex: 11 }}>担当</th>
-                <th style={{ minWidth: 80, background: '#fafaf9', position: 'sticky', right: 0, zIndex: 11, borderLeft: '0.5px solid var(--b1)' }}>ステータス</th>
+                <th style={{ minWidth: 80, borderLeft: '0.5px solid var(--b1)', background: '#fafaf9', position: 'sticky', right: 108, zIndex: 11 }}>担当</th>
+                <th style={{ minWidth: 108, background: '#fafaf9', position: 'sticky', right: 0, zIndex: 11, borderLeft: '0.5px solid var(--b1)' }}>ステータス</th>
               </tr>
               <tr className="g-wrow">
                 <th style={{ borderRight: '0.5px solid var(--b1)', position: 'sticky', left: 0, zIndex: 11, background: '#fafaf9' }}></th>
                 {weeks.map((w, i) => (
                   <th key={i} className={i === currentWeekIdx ? 'cw' : ''} style={{ minWidth: CW }}>{w.label}</th>
                 ))}
-                <th style={{ borderLeft: '0.5px solid var(--b1)', background: '#fafaf9', position: 'sticky', right: 80, zIndex: 11 }}></th>
+                <th style={{ borderLeft: '0.5px solid var(--b1)', background: '#fafaf9', position: 'sticky', right: 108, zIndex: 11 }}></th>
                 <th style={{ background: '#fafaf9', position: 'sticky', right: 0, zIndex: 11, borderLeft: '0.5px solid var(--b1)' }}></th>
               </tr>
             </thead>
@@ -550,11 +557,14 @@ markdownは使わない。記号は・と①②③のみ。
                                   <span className={`ob ${ownerClass[t.own]}`}>{t.assignee || ownerLabel[t.own]}</span>
                                 </td>
                                 <td className="action-cell">
-                                  <select className="st-sel" value={t.st} onChange={e => updateStatus(t.name, e.target.value as TaskStatus)}>
-                                    {Object.entries(statusLabel).map(([val, lbl]) => (
-                                      <option key={val} value={val}>{lbl}</option>
-                                    ))}
-                                  </select>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                    <select className="st-sel" value={t.st} onChange={e => updateStatus(t.name, e.target.value as TaskStatus)}>
+                                      {Object.entries(statusLabel).map(([val, lbl]) => (
+                                        <option key={val} value={val}>{lbl}</option>
+                                      ))}
+                                    </select>
+                                    <button onClick={() => deleteTask(t)} title="削除" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, padding: '0 2px', color: 'var(--muted)', flexShrink: 0 }}>🗑</button>
+                                  </div>
                                 </td>
                               </tr>
                             )
