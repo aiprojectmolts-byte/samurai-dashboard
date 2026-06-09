@@ -12,6 +12,10 @@ interface Plan {
   persona?: string
   stage?: string
   ceoAngle?: string
+  needs?: string        // 想定されるニーズ
+  userGoal?: string     // ユーザーのゴール・得られる結果
+  story?: string        // 必要な要素とストーリー（構成）
+  outline?: { heading: string, description: string }[]  // 記事目次
 }
 
 interface Expression {
@@ -53,8 +57,9 @@ const PROMPT_GENERAL = `このドキュメントの要点を構造化してま�
 
 export default function ContentGen() {
   const [text, setText] = useState('')
-  const [step, setStep] = useState<'input'|'planning'|'editing'|'writing'|'done'>('input')
+  const [step, setStep] = useState<'input'|'planning'|'structure'|'editing'|'writing'|'done'>('input')
   const [plans, setPlans] = useState<Plan[]>([])
+  const [structuredPlans, setStructuredPlans] = useState<Plan[]>([])
   const [editedPlans, setEditedPlans] = useState<EditedPlan[]>([])
   const [results, setResults] = useState<FinalResult[]>([])
   const [selectedResult, setSelectedResult] = useState(0)
@@ -539,6 +544,48 @@ ${sanitizedCompetitive}` : ''}`
   }
 
   // STEP2: 編集エージェント
+  // STEP2: 構成エージェント
+  const runStructure = async () => {
+    setError(''); setLoading(true); setStep('structure')
+    try {
+      const selectedPlans = plans.filter((_, i) => selectedPlanIndices.has(i))
+      const batchSize = 3
+      const all: any[] = []
+      for (let i = 0; i < selectedPlans.length; i += batchSize) {
+        const batch = selectedPlans.slice(i, i + batchSize)
+        const batchResult = await callClaude(
+          `あなたはSAMURAI ARCHITECTSのコンテンツ構成担当AIです。
+以下の企画骨子をもとに記事の構成を設計してください。
+
+JSONのみ返してください：
+{"structuredPlans":[{
+  "title": "（企画タイトルをそのまま）",
+  "needs": "この記事が解決する読者のニーズ・悩み（1〜2文）",
+  "userGoal": "記事を読み終えた読者が得られる最高の結果・変化（1〜2文）",
+  "story": "ゴールに到達するために必要な要素と記事の流れ（3〜5点・箇条書き）",
+  "outline": [
+    {"heading": "見出しテキスト", "description": "この節で伝えること（1文）"}
+  ]
+}]}
+
+企画骨子：${JSON.stringify(batch)}`,
+          JSON.stringify(batch)
+        )
+        all.push(...(batchResult.structuredPlans || []))
+      }
+      // 構成フィールドを元の企画にマージ（タイトルで照合）
+      const merged: Plan[] = selectedPlans.map(p => {
+        const s = all.find((x: any) => x.title === p.title) || {}
+        return { ...p, needs: s.needs || '', userGoal: s.userGoal || '', story: s.story || '', outline: Array.isArray(s.outline) ? s.outline : [] }
+      })
+      setStructuredPlans(merged)
+    } catch (e) {
+      setError('構成生成に失敗しました。'); setStep('planning')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const runEditing = async () => {
     setError(''); setLoading(true); setStep('editing')
     try {
@@ -548,8 +595,8 @@ ${sanitizedCompetitive}` : ''}`
       const pastNg = exData.length > 0
         ? `\n\n【蓄積されたNG表現（必ず避けてください）】\n${[...new Set(exData.flatMap((e: any) => (e.items || []).filter((i: any) => i.judgment === 'NG').map((i: any) => i.expression || '')))].filter(Boolean).slice(0, 30).map((s: any) => `・${s}`).join('\n')}`
         : ''
-      // 3企画ずつバッチ処理
-      const selectedPlans = plans.filter((_, i) => selectedPlanIndices.has(i))
+      // 構成エージェントの出力（構成フィールド付き）を編集対象にする
+      const selectedPlans = structuredPlans
       const batchSize = 3
       const allEditedPlans: any[] = []
       for (let i = 0; i < selectedPlans.length; i += batchSize) {
@@ -627,18 +674,23 @@ markdownは使わない。記号は①②③と・のみ。`,
         )
         allEditedPlans.push(...(batchResult.editedPlans || []))
       }
-      const plansWithJudgment = allEditedPlans.map((p: any) => ({
-        ...p,
-        expressions: (p.expressions || []).map((ex: any) => ({
-          text: typeof ex === 'string' ? ex : ex.text,
-          context: typeof ex === 'string' ? '' : (ex.context || ''),
-          checkPoint: typeof ex === 'string' ? '' : (ex.checkPoint || ''),
-          judgment: ''
-        })),
-        confirmationDoc: p.confirmationDoc || '',
-        okExpressions: p.okExpressions || [],
-        ngExpressions: p.ngExpressions || []
-      }))
+      const plansWithJudgment = allEditedPlans.map((p: any) => {
+        // 構成エージェントの構成フィールドをタイトルで照合してマージ（編集出力には無いため保持）
+        const src = structuredPlans.find(sp => sp.title === p.title) || {}
+        return {
+          ...src,
+          ...p,
+          expressions: (p.expressions || []).map((ex: any) => ({
+            text: typeof ex === 'string' ? ex : ex.text,
+            context: typeof ex === 'string' ? '' : (ex.context || ''),
+            checkPoint: typeof ex === 'string' ? '' : (ex.checkPoint || ''),
+            judgment: ''
+          })),
+          confirmationDoc: p.confirmationDoc || '',
+          okExpressions: p.okExpressions || [],
+          ngExpressions: p.ngExpressions || []
+        }
+      })
       setEditedPlans(plansWithJudgment)
       await saveExpressions(allEditedPlans)
     } catch (e) {
@@ -704,8 +756,9 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
   const stepLabel: Record<string, string> = {
     input: '① MTGデータ入力',
     planning: '② 企画エージェント',
-    editing: '③ 編集エージェント',
-    writing: '④ 執筆エージェント',
+    structure: '③ 構成エージェント',
+    editing: '④ 編集エージェント',
+    writing: '⑤ 執筆エージェント',
     done: '✓ 完了'
   }
 
@@ -719,7 +772,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           {showHistory ? '← 生成に戻る' : '📚 過去の企画履歴'}
         </button>
       </div>
-      <div className="pg-sub">企画 → 編集 → 執筆の3エージェントがMTGから発信コンテンツを自動生成します</div>
+      <div className="pg-sub">企画 → 構成 → 編集 → 執筆の4エージェントがMTGから発信コンテンツを自動生成します</div>
 
       {/* 履歴ビュー */}
       {showHistory && (
@@ -771,8 +824,8 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
       {!showHistory && <>
       {/* ステップインジケーター */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
-        {(['input','planning','editing','writing','done'] as const).map((s, i) => {
-          const steps = ['input','planning','editing','writing','done']
+        {(['input','planning','structure','editing','writing','done'] as const).map((s, i) => {
+          const steps = ['input','planning','structure','editing','writing','done']
           const current = steps.indexOf(step)
           const thisIdx = steps.indexOf(s)
           const isDone = thisIdx < current
@@ -785,7 +838,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                 color: isActive ? '#fff' : isDone ? 'var(--green)' : 'var(--muted)',
                 border: `0.5px solid ${isActive ? 'var(--ink)' : isDone ? 'var(--green)' : 'var(--b1)'}`
               }}>{stepLabel[s]}</div>
-              {i < 4 && <div style={{ width: 12, height: 0.5, background: 'var(--b1)' }} />}
+              {i < 5 && <div style={{ width: 12, height: 0.5, background: 'var(--b1)' }} />}
             </div>
           )
         })}
@@ -878,8 +931,43 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setStep('input')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← やり直す</button>
-            <button onClick={runEditing} disabled={loading || selectedPlanIndices.size === 0} style={{ flex: 1, padding: 10, background: selectedPlanIndices.size > 0 ? 'var(--ink)' : 'var(--muted)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: selectedPlanIndices.size > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
-              ✍️ 選択した{selectedPlanIndices.size}件を編集
+            <button onClick={runStructure} disabled={loading || selectedPlanIndices.size === 0} style={{ flex: 1, padding: 10, background: selectedPlanIndices.size > 0 ? 'var(--ink)' : 'var(--muted)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: selectedPlanIndices.size > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+              🧩 選択した{selectedPlanIndices.size}件を構成
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP: 構成結果 */}
+      {step === 'structure' && !loading && structuredPlans.length > 0 && (
+        <div>
+          <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16, marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 12 }}>構成エージェントの出力</div>
+            {structuredPlans.map((p, i) => (
+              <div key={i} style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 12, marginBottom: 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>企画{i+1}: {p.title}</div>
+                {p.needs && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>想定されるニーズ</div><div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{p.needs}</div></>}
+                {p.userGoal && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>ゴール・得られる結果</div><div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{p.userGoal}</div></>}
+                {p.story && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>要素とストーリー</div><div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6, whiteSpace: 'pre-wrap' as const }}>{p.story}</div></>}
+                {p.outline && p.outline.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>記事目次</div>
+                    {p.outline.map((o, j) => (
+                      <div key={j} style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 4, padding: '6px 10px', marginBottom: 4 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{j+1}. {o.heading}</div>
+                        {o.description && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{o.description}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setStep('planning')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← 企画に戻る</button>
+            <button onClick={runEditing} disabled={loading} style={{ flex: 1, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              ✍️ 編集エージェントへ進む
             </button>
           </div>
         </div>
@@ -944,7 +1032,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             <button onClick={() => exportWord('企画・編集チェック', editSections(editedPlans))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setStep('planning')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← 企画に戻る</button>
+            <button onClick={() => setStep('structure')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← 構成に戻る</button>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
               {(['both', 'x', 'note'] as const).map(mode => (
                 <button key={mode} onClick={() => setWritingMode(mode)}
@@ -965,7 +1053,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
         <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 32, textAlign: 'center' as const }}>
           <div style={{ fontSize: 24, marginBottom: 8 }}>🤖</div>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-            {step === 'planning' ? '企画エージェントが考えています...' : step === 'editing' ? '編集エージェントがチェックしています...' : '執筆エージェントが書いています...'}
+            {step === 'planning' ? '企画エージェントが考えています...' : step === 'structure' ? '構成エージェントが設計しています...' : step === 'editing' ? '編集エージェントがチェックしています...' : '執筆エージェントが書いています...'}
           </div>
           <div style={{ fontSize: 11, color: 'var(--muted)' }}>少々お待ちください</div>
         </div>
@@ -980,7 +1068,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             <button onClick={() => { const t = writingMode==='note'&&results[selectedResult]?.content?.noteTitle||'発信コンテンツ一式'; exportPDF(t, writingSections(results, writingMode)) }} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
             <button onClick={() => { const t = writingMode==='note'&&results[selectedResult]?.content?.noteTitle||'発信コンテンツ一式'; exportWord(t, writingSections(results, writingMode)) }} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
             <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => { setStep('input'); setPlans([]); setEditedPlans([]); setResults([]); setText('') }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>最初からやり直す</button>
+            <button onClick={() => { setStep('input'); setPlans([]); setStructuredPlans([]); setEditedPlans([]); setResults([]); setText('') }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>最初からやり直す</button>
           </div>
           </div>
           </div>
