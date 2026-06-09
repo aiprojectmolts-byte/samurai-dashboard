@@ -30,6 +30,8 @@ interface Task {
   impact?: string
   src?: string
   備考?: string
+  背景?: string
+  背景ソース?: string
 }
 
 const defaultTasks: Task[] = [

@@ -6,7 +6,7 @@ interface Task {
   id?: string
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
-  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string
+  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string
 }
 interface Members { samurai: string[]; molts: string[] }
 interface Props {
@@ -144,6 +144,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
             {t.src && t.src !== 'slack' && <span style={{ fontSize: 9, background: '#fef9c3', color: '#854d0e', padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>📋 {t.src.replace(/^\d{4}-\d{2}-\d{2}\s*/, '')}</span>}
           </div>
           {t.impact && <div className="id">{t.impact}</div>}
+          {t.背景 && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, lineHeight: 1.5 }}>背景：{t.背景}{t.背景ソース ? `（${t.背景ソース}）` : ''}</div>}
         </div>
         <select className="st-sel" value={t.st} onChange={e => onStatusChange(idx, e.target.value)}>
           {(Object.entries(statusLabel) as [TaskStatus, string][]).map(([val, lbl]) => (

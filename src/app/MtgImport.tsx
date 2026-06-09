@@ -2,7 +2,7 @@
 import { useState, useRef } from 'react'
 
 type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
-interface Task { id?: string; 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string }
+interface Task { id?: string; 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string }
 interface Question { id: string; text: string; assignee: string; status: 'unanswered'|'answered'; priority: 'high'|'normal'; linkedTask: string; src: string; createdAt?: string }
 interface Extracted { summary: string; tasks: Task[]; questions: Question[]; knowledge?: any[] }
 interface ReviewDisplay { name: string; oldLabel: string; newLabel: string; outcome: '承認'|'FB'|'言及なし'; fbContent?: string }
@@ -351,8 +351,8 @@ JSONのみ返してください：
 
       const teamName = (t: Task) => t.own === 'molts' ? 'THE MOLTS' : t.own === 'samurai' ? 'SAMURAI' : '共同'
       const combined = {
-        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: ownerName(t), 担当チーム: teamName(t), 期限: t.e, 備考: t.備考 || '' })),
-        今週来週: upcoming.map(t => ({ name: t.name, assignee: ownerName(t), 担当チーム: teamName(t), 期限: t.e })),
+        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: ownerName(t), 担当チーム: teamName(t), 期限: t.e, 背景: t.背景 || '', 備考: t.備考 || '' })),
+        今週来週: upcoming.map(t => ({ name: t.name, assignee: ownerName(t), 担当チーム: teamName(t), 期限: t.e, 背景: t.背景 || '' })),
       }
 
       const prompt = `以下のタスクをもとに次回週次定例MTGのアジェンダを作成してください。
@@ -369,6 +369,7 @@ THE MOLTSメンバー名一覧：${moltsMembers || '（未登録）'}
 ・担当者名を各項目に含める。
 ・対象タスクが0件のセクションは省略する。
 ・タスク名は省略せず全文で出力する。
+・各タスクに背景フィールドがある場合、テキスト形式では各項目の下に『背景：〇〇』を1行追加すること。
 
 以下の構成で出力すること：
 

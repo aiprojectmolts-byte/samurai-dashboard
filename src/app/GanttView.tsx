@@ -17,6 +17,8 @@ interface Task {
   impact?: string
   src?: string
   備考?: string
+  背景?: string
+  背景ソース?: string
 }
 
 const defaultTasks: Task[] = [
@@ -141,6 +143,8 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
   })
   const [saving, setSaving] = useState(false)
   const [agenda, setAgenda] = useState<string | null>(null)
+  const [agendaItems, setAgendaItems] = useState<any[]>([])
+  const [agendaTab, setAgendaTab] = useState<'text' | 'detail'>('text')
   const [agendaLoading, setAgendaLoading] = useState(false)
   const [agendaOpen, setAgendaOpen] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -203,15 +207,24 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
       // 全グループ0件
       if (reviewTasks.length === 0 && upcomingDoing.length === 0 && overdue.length === 0) {
         setAgenda('対象タスクがありません')
+        setAgendaItems([])
         setAgendaLoading(false)
         return
       }
 
       const classified = {
-        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e, 備考: t.備考 || '' })),
-        進行中_今週来週: upcomingDoing.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e })),
-        遅延: overdue.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e })),
+        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e, 背景: t.背景 || '', 備考: t.備考 || '' })),
+        進行中_今週来週: upcomingDoing.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e, 背景: t.背景 || '' })),
+        遅延: overdue.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e, 背景: t.背景 || '' })),
       }
+
+      // 詳細タブ用の構造化データ
+      const mkItem = (t: Task, section: string) => ({ section, name: t.name, assignee: owner(t), status: statusLabel[t.st], 背景: t.背景 || '', ソース: t.背景ソース || '', 確認ポイント: t.備考 || '' })
+      setAgendaItems([
+        ...reviewTasks.map(t => mkItem(t, '定例確認')),
+        ...upcomingDoing.map(t => mkItem(t, '今週・来週')),
+        ...overdue.map(t => mkItem(t, '遅延')),
+      ])
 
       const samuraiMembers = (members?.samurai || []).join('、')
       const moltsMembers = (members?.molts || []).join('、')
@@ -231,6 +244,7 @@ ${JSON.stringify(classified, null, 2)}
 ・担当者名を各項目に含める。
 ・対象タスクが0件のセクションは省略する。
 ・タスク名は省略せず全文で出力する。
+・各タスクに背景フィールドがある場合、テキスト形式では各項目の下に『背景：〇〇』を1行追加すること。
 
 以下の構成で出力すること：
 
@@ -482,6 +496,7 @@ JSONの「定例確認」のタスクのみを列挙する。
                             {t.st === 'delayed' && <span className="delay-tag">遅れあり</span>}
                             {t.chg && <span className="delay-tag">変更</span>}
                           </div>
+                          {t.背景 && <div style={{ fontSize: 9, color: 'var(--muted)', whiteSpace: 'normal', lineHeight: 1.4, paddingLeft: 32, marginTop: 2 }}>背景：{t.背景}</div>}
                         </td>
                         {renderBarCells(t.s, t.e, t.st, t.chg)}
                         <td className="owner-cell">
@@ -526,7 +541,36 @@ JSONの「定例確認」のタスクのみを列挙する。
           </div>
           {confirmError && <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--red)' }}>{confirmError}</div>}
           {agendaOpen && (
-            <div style={{ padding: '14px 16px', fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', fontFamily: 'inherit' }}>{renderLines(agenda)}</div>
+            <div>
+              {isRealAgenda && (
+                <div style={{ display: 'flex', gap: 6, padding: '10px 14px 0' }}>
+                  {(['text', 'detail'] as const).map(tab => (
+                    <button key={tab} onClick={() => setAgendaTab(tab)}
+                      style={{ padding: '3px 12px', borderRadius: 20, border: '0.5px solid var(--b1)', background: agendaTab === tab ? 'var(--ink)' : 'none', color: agendaTab === tab ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>
+                      {tab === 'text' ? 'テキスト' : '詳細'}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(!isRealAgenda || agendaTab === 'text') ? (
+                <div style={{ padding: '14px 16px', fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', fontFamily: 'inherit' }}>{renderLines(agenda)}</div>
+              ) : (
+                <div style={{ padding: '12px 14px' }}>
+                  {agendaItems.map((it, i) => (
+                    <div key={i} style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, padding: '10px 12px', marginBottom: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--muted)', background: 'var(--bg)', padding: '1px 6px', borderRadius: 3 }}>{it.section}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{it.name}</span>
+                        <span style={{ fontSize: 10, color: 'var(--muted)' }}>{it.assignee} ・ {it.status}</span>
+                      </div>
+                      {it.背景 && <div style={{ fontSize: 11, color: 'var(--ink2)', marginTop: 2 }}>背景：{it.背景}</div>}
+                      {it.ソース && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>ソース：{it.ソース}</div>}
+                      {it.確認ポイント && <div style={{ fontSize: 11, color: '#1d4ed8', marginTop: 2, whiteSpace: 'pre-wrap' as const }}>確認ポイント：{it.確認ポイント}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

@@ -8,7 +8,7 @@ interface Task {
   id?: string
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
-  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string
+  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string
 }
 
 interface Members { samurai: string[]; molts: string[] }
@@ -120,6 +120,16 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
             <input type="checkbox" checked={form.blocker ?? false} onChange={e => set('blocker', e.target.checked)}
               style={{ width: 14, height: 14, accentColor: 'var(--red)' }} />
             <span style={{ fontSize: 12, color: 'var(--ink)', fontWeight: 500 }}>ブロッカー（他のタスクが止まる）</span>
+          </label>
+
+          <label style={lbl}>
+            背景・追加経緯
+            <textarea value={form.背景 ?? ''} onChange={e => set('背景', e.target.value)} style={{ ...inp, minHeight: 60, resize: 'vertical' }} placeholder="このタスクが生まれた理由・目的（任意）" />
+          </label>
+
+          <label style={lbl}>
+            ソース
+            <input value={form.背景ソース ?? ''} onChange={e => set('背景ソース', e.target.value)} style={inp} placeholder="例：2026-06-03 キックオフMTG（任意）" />
           </label>
 
           <label style={lbl}>
