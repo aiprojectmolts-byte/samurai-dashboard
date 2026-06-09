@@ -57,6 +57,12 @@ const PROMPT_CONTENT = `このドキュメントから、外部発信できる�
 const PROMPT_GENERAL = `このドキュメントの要点を構造化してまとめてください。
 日付・種類・概要・重要ポイント・キーワードを含めてください。`
 
+// AIレスポンスの型ゆれに耐える安全アクセサ
+const safeText = (v: any): string =>
+  v == null ? '' : Array.isArray(v) ? v.map((x: any) => (typeof x === 'string' ? x : (x?.text || x?.heading || ''))).filter(Boolean).join('\n') : (typeof v === 'string' ? v : String(v))
+const safeArr = (v: any): any[] => (Array.isArray(v) ? v : [])
+const safeBullets = (v: any): string[] => safeText(v).split(/\n|・/).map(s => s.trim()).filter(Boolean)
+
 export default function ContentGen() {
   const [text, setText] = useState('')
   const [step, setStep] = useState<'input'|'planning'|'structure'|'editing'|'writing'|'done'>('input')
@@ -92,18 +98,21 @@ export default function ContentGen() {
   // 構成をプレーンテキスト化（コピー用）
   const structurePlainText = (p: Plan) => {
     const lines: string[] = []
-    lines.push(`${p.title}`, '')
+    lines.push(`${safeText(p.title)}`, '')
     lines.push('想定されるニーズ')
-    if (p.needsManifest) { lines.push('  【顕在ニーズ】'); p.needsManifest.split(/\n|・/).map(s => s.trim()).filter(Boolean).forEach(s => lines.push(`  ・${s}`)) }
-    if (p.needsLatent) { lines.push('  【潜在ニーズ】'); p.needsLatent.split(/\n|・/).map(s => s.trim()).filter(Boolean).forEach(s => lines.push(`  ・${s}`)) }
+    const manifest = safeBullets(p.needsManifest), latent = safeBullets(p.needsLatent)
+    if (manifest.length > 0) { lines.push('  【顕在ニーズ】'); manifest.forEach(s => lines.push(`  ・${s}`)) }
+    if (latent.length > 0) { lines.push('  【潜在ニーズ】'); latent.forEach(s => lines.push(`  ・${s}`)) }
+    if (manifest.length === 0 && latent.length === 0 && safeText(p.needs)) lines.push(`  ${safeText(p.needs)}`)
     lines.push('', 'ユーザーのゴール・得られる結果')
-    if (p.userGoal) lines.push(`  ${p.userGoal}`)
+    if (safeText(p.userGoal)) lines.push(`  ${safeText(p.userGoal)}`)
     lines.push('', '必要な要素とストーリー')
-    if (p.story) p.story.split(/\n|・/).map(s => s.trim()).filter(Boolean).forEach(s => lines.push(`  ・${s}`))
+    safeBullets(p.story).forEach(s => lines.push(`  ・${s}`))
     lines.push('', '記事目次')
-    ;(p.outline || []).forEach(o => {
-      lines.push(`  ${o.heading}`)
-      ;(o.subheadings || []).forEach(sh => lines.push(`    ${sh}`))
+    safeArr(p.outline).forEach((o: any) => {
+      const heading = typeof o === 'string' ? o : safeText(o?.heading)
+      if (heading) lines.push(`  ${heading}`)
+      ;(typeof o === 'string' ? [] : safeArr(o?.subheadings)).forEach((sh: any) => lines.push(`    ${safeText(sh)}`))
     })
     return lines.join('\n')
   }
@@ -613,8 +622,8 @@ JSONのみ返してください：
       }
       // 構成フィールドを元の企画にマージ（タイトルで照合）
       const merged: Plan[] = selectedPlans.map(p => {
-        const s = all.find((x: any) => x.title === p.title) || {}
-        return { ...p, needsManifest: s.needsManifest || '', needsLatent: s.needsLatent || '', userGoal: s.userGoal || '', story: s.story || '', outline: Array.isArray(s.outline) ? s.outline : [] }
+        const s = all.find((x: any) => x && x.title === p.title) || {}
+        return { ...p, needsManifest: safeText(s.needsManifest), needsLatent: safeText(s.needsLatent), userGoal: safeText(s.userGoal), story: safeText(s.story), outline: safeArr(s.outline) }
       })
       setStructuredPlans(merged)
     } catch (e) {
@@ -992,10 +1001,17 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
         <div>
           <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16, marginBottom: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 12 }}>構成エージェントの出力</div>
-            {structuredPlans.map((p, i) => (
+            {structuredPlans.map((p, i) => {
+              const manifest = safeBullets(p.needsManifest)
+              const latent = safeBullets(p.needsLatent)
+              const legacyNeeds = safeText(p.needs)
+              const goal = safeText(p.userGoal)
+              const storyBullets = safeBullets(p.story)
+              const outline = safeArr(p.outline)
+              return (
               <div key={i} style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 12, marginBottom: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>企画{i+1}: {p.title}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>企画{i+1}: {safeText(p.title)}</div>
                   <button onClick={() => copyStructure(i, p)}
                     style={{ fontSize: 10, padding: '3px 10px', borderRadius: 10, border: '0.5px solid ' + (copiedStructIdx === i ? 'var(--green)' : 'var(--b1)'), background: copiedStructIdx === i ? 'var(--gbg)' : 'var(--paper)', color: copiedStructIdx === i ? 'var(--green)' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const, flexShrink: 0 }}>
                     {copiedStructIdx === i ? '✓ コピーしました' : '📋 コピー'}
@@ -1003,46 +1019,52 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                 </div>
 
                 <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>想定されるニーズ</div>
-                {p.needsManifest && (
+                {manifest.length > 0 && (
                   <div style={{ marginBottom: 6 }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)' }}>【顕在ニーズ】</div>
-                    {p.needsManifest.split(/\n|・/).map(s => s.trim()).filter(Boolean).map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
+                    {manifest.map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
                   </div>
                 )}
-                {p.needsLatent && (
+                {latent.length > 0 && (
                   <div style={{ marginBottom: 8 }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)' }}>【潜在ニーズ】</div>
-                    {p.needsLatent.split(/\n|・/).map(s => s.trim()).filter(Boolean).map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
+                    {latent.map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
                   </div>
                 )}
                 {/* 旧データ後方互換 */}
-                {!p.needsManifest && !p.needsLatent && p.needs && <div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{p.needs}</div>}
+                {manifest.length === 0 && latent.length === 0 && legacyNeeds && <div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{legacyNeeds}</div>}
 
-                {p.userGoal && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>ユーザーのゴール・得られる結果</div><div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{p.userGoal}</div></>}
+                {goal && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>ユーザーのゴール・得られる結果</div><div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{goal}</div></>}
 
-                {p.story && (
+                {storyBullets.length > 0 && (
                   <>
                     <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>必要な要素とストーリー</div>
                     <div style={{ marginBottom: 8 }}>
-                      {p.story.split(/\n|・/).map(s => s.trim()).filter(Boolean).map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
+                      {storyBullets.map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
                     </div>
                   </>
                 )}
 
-                {p.outline && p.outline.length > 0 && (
+                {outline.length > 0 && (
                   <div>
                     <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>記事目次</div>
-                    {p.outline.map((o, j) => (
-                      <div key={j} style={{ marginBottom: 4 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{o.heading}</div>
-                        {(o.subheadings || []).map((sh, k) => <div key={k} style={{ fontSize: 11, color: 'var(--ink2)', paddingLeft: 14, lineHeight: 1.6 }}>{sh}</div>)}
-                        {o.description && <div style={{ fontSize: 10, color: 'var(--muted)', paddingLeft: 14, marginTop: 1 }}>{o.description}</div>}
-                      </div>
-                    ))}
+                    {outline.map((o: any, j: number) => {
+                      const heading = typeof o === 'string' ? o : safeText(o?.heading)
+                      const subs = typeof o === 'string' ? [] : safeArr(o?.subheadings)
+                      const desc = typeof o === 'string' ? '' : safeText(o?.description)
+                      return (
+                        <div key={j} style={{ marginBottom: 4 }}>
+                          {heading && <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{heading}</div>}
+                          {subs.map((sh: any, k: number) => <div key={k} style={{ fontSize: 11, color: 'var(--ink2)', paddingLeft: 14, lineHeight: 1.6 }}>{safeText(sh)}</div>)}
+                          {desc && <div style={{ fontSize: 10, color: 'var(--muted)', paddingLeft: 14, marginTop: 1 }}>{desc}</div>}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
           {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8 }}>
