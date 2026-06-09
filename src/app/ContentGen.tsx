@@ -12,10 +12,12 @@ interface Plan {
   persona?: string
   stage?: string
   ceoAngle?: string
-  needs?: string        // 想定されるニーズ
+  needs?: string        // 想定されるニーズ（旧・後方互換）
+  needsManifest?: string // 顕在ニーズ
+  needsLatent?: string   // 潜在ニーズ
   userGoal?: string     // ユーザーのゴール・得られる結果
   story?: string        // 必要な要素とストーリー（構成）
-  outline?: { heading: string, description: string }[]  // 記事目次
+  outline?: { heading: string, subheadings?: string[], description?: string }[]  // 記事目次（大見出し＋小見出し）
 }
 
 interface Expression {
@@ -77,12 +79,40 @@ export default function ContentGen() {
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState('')
   const [copiedDocIdx, setCopiedDocIdx] = useState<number | null>(null)
+  const [copiedStructIdx, setCopiedStructIdx] = useState<number | null>(null)
 
   const copyDoc = async (idx: number, doc: string) => {
     try {
       await navigator.clipboard.writeText(doc)
       setCopiedDocIdx(idx)
       setTimeout(() => setCopiedDocIdx(c => c === idx ? null : c), 2000)
+    } catch {}
+  }
+
+  // 構成をプレーンテキスト化（コピー用）
+  const structurePlainText = (p: Plan) => {
+    const lines: string[] = []
+    lines.push(`${p.title}`, '')
+    lines.push('想定されるニーズ')
+    if (p.needsManifest) { lines.push('  【顕在ニーズ】'); p.needsManifest.split(/\n|・/).map(s => s.trim()).filter(Boolean).forEach(s => lines.push(`  ・${s}`)) }
+    if (p.needsLatent) { lines.push('  【潜在ニーズ】'); p.needsLatent.split(/\n|・/).map(s => s.trim()).filter(Boolean).forEach(s => lines.push(`  ・${s}`)) }
+    lines.push('', 'ユーザーのゴール・得られる結果')
+    if (p.userGoal) lines.push(`  ${p.userGoal}`)
+    lines.push('', '必要な要素とストーリー')
+    if (p.story) p.story.split(/\n|・/).map(s => s.trim()).filter(Boolean).forEach(s => lines.push(`  ・${s}`))
+    lines.push('', '記事目次')
+    ;(p.outline || []).forEach(o => {
+      lines.push(`  ${o.heading}`)
+      ;(o.subheadings || []).forEach(sh => lines.push(`    ${sh}`))
+    })
+    return lines.join('\n')
+  }
+
+  const copyStructure = async (idx: number, p: Plan) => {
+    try {
+      await navigator.clipboard.writeText(structurePlainText(p))
+      setCopiedStructIdx(idx)
+      setTimeout(() => setCopiedStructIdx(c => c === idx ? null : c), 2000)
     } catch {}
   }
 
@@ -557,14 +587,22 @@ ${sanitizedCompetitive}` : ''}`
           `あなたはSAMURAI ARCHITECTSのコンテンツ構成担当AIです。
 以下の企画骨子をもとに記事の構成を設計してください。
 
+・顕在ニーズ：読者が検索・調べる時に意識しているニーズ
+・潜在ニーズ：読者が自覚していない本当の欲求
+・記事目次は大見出し＋小見出しの2階層で、章は10章以内に収めること
+
 JSONのみ返してください：
 {"structuredPlans":[{
-  "title": "（企画タイトルをそのまま）",
-  "needs": "この記事が解決する読者のニーズ・悩み（1〜2文）",
-  "userGoal": "記事を読み終えた読者が得られる最高の結果・変化（1〜2文）",
-  "story": "ゴールに到達するために必要な要素と記事の流れ（3〜5点・箇条書き）",
+  "title": "企画タイトルそのまま",
+  "needsManifest": "【顕在ニーズ】箇条書き（・で区切る）",
+  "needsLatent": "【潜在ニーズ】箇条書き（・で区切る）",
+  "userGoal": "読者が記事を読み終えた時に得られる最高の結果・変化（2〜3文）",
+  "story": "ゴールに到達するために必要な要素と構成（箇条書き3〜5点）",
   "outline": [
-    {"heading": "見出しテキスト", "description": "この節で伝えること（1文）"}
+    {
+      "heading": "1、大見出し",
+      "subheadings": ["1−1、小見出し", "1−2、小見出し"]
+    }
   ]
 }]}
 
@@ -576,7 +614,7 @@ JSONのみ返してください：
       // 構成フィールドを元の企画にマージ（タイトルで照合）
       const merged: Plan[] = selectedPlans.map(p => {
         const s = all.find((x: any) => x.title === p.title) || {}
-        return { ...p, needs: s.needs || '', userGoal: s.userGoal || '', story: s.story || '', outline: Array.isArray(s.outline) ? s.outline : [] }
+        return { ...p, needsManifest: s.needsManifest || '', needsLatent: s.needsLatent || '', userGoal: s.userGoal || '', story: s.story || '', outline: Array.isArray(s.outline) ? s.outline : [] }
       })
       setStructuredPlans(merged)
     } catch (e) {
@@ -945,17 +983,49 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 12 }}>構成エージェントの出力</div>
             {structuredPlans.map((p, i) => (
               <div key={i} style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 12, marginBottom: 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>企画{i+1}: {p.title}</div>
-                {p.needs && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>想定されるニーズ</div><div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{p.needs}</div></>}
-                {p.userGoal && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>ゴール・得られる結果</div><div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{p.userGoal}</div></>}
-                {p.story && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>要素とストーリー</div><div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6, whiteSpace: 'pre-wrap' as const }}>{p.story}</div></>}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>企画{i+1}: {p.title}</div>
+                  <button onClick={() => copyStructure(i, p)}
+                    style={{ fontSize: 10, padding: '3px 10px', borderRadius: 10, border: '0.5px solid ' + (copiedStructIdx === i ? 'var(--green)' : 'var(--b1)'), background: copiedStructIdx === i ? 'var(--gbg)' : 'var(--paper)', color: copiedStructIdx === i ? 'var(--green)' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const, flexShrink: 0 }}>
+                    {copiedStructIdx === i ? '✓ コピーしました' : '📋 コピー'}
+                  </button>
+                </div>
+
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>想定されるニーズ</div>
+                {p.needsManifest && (
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)' }}>【顕在ニーズ】</div>
+                    {p.needsManifest.split(/\n|・/).map(s => s.trim()).filter(Boolean).map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
+                  </div>
+                )}
+                {p.needsLatent && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)' }}>【潜在ニーズ】</div>
+                    {p.needsLatent.split(/\n|・/).map(s => s.trim()).filter(Boolean).map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
+                  </div>
+                )}
+                {/* 旧データ後方互換 */}
+                {!p.needsManifest && !p.needsLatent && p.needs && <div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{p.needs}</div>}
+
+                {p.userGoal && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>ユーザーのゴール・得られる結果</div><div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{p.userGoal}</div></>}
+
+                {p.story && (
+                  <>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>必要な要素とストーリー</div>
+                    <div style={{ marginBottom: 8 }}>
+                      {p.story.split(/\n|・/).map(s => s.trim()).filter(Boolean).map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
+                    </div>
+                  </>
+                )}
+
                 {p.outline && p.outline.length > 0 && (
                   <div>
                     <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>記事目次</div>
                     {p.outline.map((o, j) => (
-                      <div key={j} style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 4, padding: '6px 10px', marginBottom: 4 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{j+1}. {o.heading}</div>
-                        {o.description && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{o.description}</div>}
+                      <div key={j} style={{ marginBottom: 4 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{o.heading}</div>
+                        {(o.subheadings || []).map((sh, k) => <div key={k} style={{ fontSize: 11, color: 'var(--ink2)', paddingLeft: 14, lineHeight: 1.6 }}>{sh}</div>)}
+                        {o.description && <div style={{ fontSize: 10, color: 'var(--muted)', paddingLeft: 14, marginTop: 1 }}>{o.description}</div>}
                       </div>
                     ))}
                   </div>
