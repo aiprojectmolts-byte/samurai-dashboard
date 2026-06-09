@@ -147,7 +147,7 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
   })
   const [saving, setSaving] = useState(false)
   const [agenda, setAgenda] = useState<string | null>(null)
-  const [agendaItems, setAgendaItems] = useState<any[]>([])
+  const [agendaDetail, setAgendaDetail] = useState<any | null>(null)
   const [agendaTab, setAgendaTab] = useState<'text' | 'detail'>('text')
   const [agendaLoading, setAgendaLoading] = useState(false)
   const [agendaOpen, setAgendaOpen] = useState(true)
@@ -239,7 +239,7 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
 
       if (activeTasks.length === 0 && prevAgenda === 'なし') {
         setAgenda('対象タスクがありません')
-        setAgendaItems([])
+        setAgendaDetail(null)
         setAgendaLoading(false)
         return
       }
@@ -250,50 +250,44 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
         背景: t.背景 || '', 備考: t.備考 || '', threadUrl: t.threadUrl || '',
       }))
 
-      // 詳細タブ用の構造化データ（4セクション）
-      const items: any[] = []
-      if (prevAgenda !== 'なし') items.push({ section: '前回アクションの確認', name: '前回確定アジェンダのネクストアクションを確認する', assignee: '', status: '', 施策: '', 背景: '', 期限: '', 確認ポイント: '', threadUrl: '' })
-      activeTasks.forEach(t => items.push({ section: '施策別の進捗', name: t.name, assignee: owner(t), status: statusLabel[t.st], 施策: t.施策 || '未分類', 背景: t.背景 || '', 期限: t.e, 確認ポイント: '', threadUrl: '' }))
-      reviewTasks.forEach(t => items.push({ section: '今日決めること', name: t.name, assignee: owner(t), status: statusLabel[t.st], 施策: t.施策 || '未分類', 背景: t.背景 || '', 期限: t.e, 確認ポイント: t.備考 || '', threadUrl: '' }))
-      threadTasks.forEach(t => items.push({ section: 'Slackで確認中', name: t.name, assignee: owner(t), status: statusLabel[t.st], 施策: t.施策 || '未分類', 背景: t.背景 || '', 期限: t.e, 確認ポイント: t.備考 || '', threadUrl: t.threadUrl || '' }))
-      nextWeek.forEach(t => items.push({ section: '次週アクション', name: t.name, assignee: owner(t), status: statusLabel[t.st], 施策: t.施策 || '未分類', 背景: t.背景 || '', 期限: t.e, 確認ポイント: '', threadUrl: '' }))
-      setAgendaItems(items)
+      // 詳細タブ用の構造化データ（AIを呼ばずタスクから直接構築）
+      const mkEntry = (t: Task) => ({ name: t.name, assignee: owner(t), status: statusLabel[t.st], st: t.st, 施策: t.施策 || '未分類', 背景: t.背景 || '', threadUrl: t.threadUrl || '', 期限: t.e })
+      const categoryOrder: string[] = []
+      const byCategory: Record<string, any[]> = {}
+      activeTasks.forEach(t => {
+        const c = t.施策 || '未分類'
+        if (!byCategory[c]) { byCategory[c] = []; categoryOrder.push(c) }
+        byCategory[c].push(mkEntry(t))
+      })
+      const decision = list.filter(t => t.st === 'review' || t.st === 'thread-review').map(mkEntry)
+      setAgendaDetail({ prevAgenda, categoryOrder, byCategory, decision, nextWeek: nextWeek.map(mkEntry) })
 
-      const prompt = `以下のデータをもとに、週次定例MTGのアジェンダを作成してください。
+      const prompt = `以下のタスクデータをもとに、週次定例MTGのシンプルなアジェンダを生成してください。
 
 今日の日付：${today}
 タスク一覧（JSON）：${JSON.stringify(taskData, null, 2)}
 前回確定アジェンダ：${prevAgenda}
 
-【出力形式】
-markdownは使わない。記号は・と①②③のみ。
+【重要】タスクの一覧を出力しないこと。
+タスクを素材にして「その場で何をするか」という議題を作ること。
+
+出力形式（プレーンテキストのみ・記号なし）：
 
 📋 定例アジェンダ（${today}）
+0. オープニング
+1. 前回アクションの確認（前回アジェンダが「なし」の場合はこの項目を省略）
+2. （施策領域ごとの議題を最大3〜4項目。例：「発信コンテンツの方向性確認」）
+n. 課題・決定事項
+n+1. 次週アクションの確認
+n+2. クローズ
 
-1. 前回アクションの確認
-前回アジェンダがある場合のみ出力。
-前回のネクストアクションがどうなったかを確認する項目を列挙。
-「なし」の場合はこのセクションを省略。
-
-2. 施策別の進捗
-タスクを施策（カテゴリ）ごとにグループ化して表示。
-各施策の中でアクティブなタスク（完了以外）を示す。
-通常進行中は「進行中」と一言。課題があるものは詳しく。
-タスクがないカテゴリは省略。
-
-3. 課題・意思決定事項
-以下を分けて表示：
-【今日決めること】
-・定例確認ステータスのタスク + 背景 + 確認してほしいこと
-【Slackで確認中】
-・スレッド確認中ステータスのタスク + threadUrlがあればURL
-
-4. 次週アクション
-今日から7日以内に期限があるタスク（未完了）を列挙。
-担当者名を含める。
-
-※ 対象が0件のセクションは省略
-※ 通常進行中で課題がないタスクは施策別セクション以外に出さない`
+ルール：
+・議題は最大7項目まで
+・各項目は短く（15〜20文字以内）
+・タスク名をそのまま使わない。「〜の確認」「〜の合意」「〜の共有」など行動ベースで書く
+・通常進行中で課題がないものはまとめる（例：「発信コンテンツの進捗共有」）
+・定例確認・スレッド確認中・遅延があるものは必ず議題に入れる
+・プレーンテキストのみ。markdownや記号（#・*・-）は使わない`
 
       // c. Claude に送信
       const aiRes = await fetch('/api/claude', {
@@ -322,6 +316,25 @@ markdownは使わない。記号は・と①②③のみ。
       setTimeout(() => setCopied(false), 2000)
     } catch {}
   }
+
+  // 詳細タブ用のタスクカード（背景は折りたたみ）
+  const renderAgendaCard = (it: any, key: string) => (
+    <div key={key} style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, padding: '8px 10px', marginBottom: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {it.st === 'review' && <span style={{ fontSize: 9, fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', padding: '1px 6px', borderRadius: 3 }}>定例確認</span>}
+        {it.st === 'thread-review' && <span style={{ fontSize: 9, fontWeight: 600, color: '#6d28d9', background: '#f5f3ff', padding: '1px 6px', borderRadius: 3 }}>スレッド確認中</span>}
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{it.name}</span>
+        <span style={{ fontSize: 10, color: 'var(--muted)' }}>{it.assignee} ・ {it.status}{it.期限 ? ` ・ ${it.期限}` : ''}</span>
+        {it.threadUrl && <a href={it.threadUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 9, color: '#6d28d9', textDecoration: 'none', background: '#f5f3ff', padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>🔗 スレッド</a>}
+      </div>
+      {it.背景 && (
+        <div style={{ marginTop: 3 }}>
+          <span onClick={() => toggleBg(key)} style={{ fontSize: 10, color: 'var(--muted)', cursor: 'pointer' }}>{expandedBg.has(key) ? '▼' : '▶'} 背景</span>
+          {expandedBg.has(key) && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, lineHeight: 1.5 }}>{it.背景}</div>}
+        </div>
+      )}
+    </div>
+  )
 
   const confirmAgenda = async () => {
     if (!agenda || confirmed) return
@@ -615,23 +628,46 @@ markdownは使わない。記号は・と①②③のみ。
               )}
               {(!isRealAgenda || agendaTab === 'text') ? (
                 <div style={{ padding: '14px 16px', fontSize: 12, lineHeight: 1.7, color: 'var(--ink)', fontFamily: 'inherit' }}>{renderLines(agenda)}</div>
-              ) : (
+              ) : agendaDetail ? (
                 <div style={{ padding: '12px 14px' }}>
-                  {agendaItems.map((it, i) => (
-                    <div key={i} style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, padding: '10px 12px', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
-                        <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--muted)', background: 'var(--bg)', padding: '1px 6px', borderRadius: 3 }}>{it.section}</span>
-                        {it.施策 && <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--ink2)', background: '#f0f0ef', padding: '1px 6px', borderRadius: 3 }}>{it.施策}</span>}
-                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{it.name}</span>
-                        {(it.assignee || it.status) && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{[it.assignee, it.status].filter(Boolean).join(' ・ ')}</span>}
-                      </div>
-                      {it.背景 && <div style={{ fontSize: 11, color: 'var(--ink2)', marginTop: 2 }}>背景：{it.背景}</div>}
-                      {it.期限 && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>期限：{it.期限}</div>}
-                      {it.確認ポイント && <div style={{ fontSize: 11, color: '#1d4ed8', marginTop: 2, whiteSpace: 'pre-wrap' as const }}>確認ポイント：{it.確認ポイント}</div>}
-                      {it.threadUrl && <a href={it.threadUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', fontSize: 10, color: '#6d28d9', marginTop: 3, textDecoration: 'none' }}>🔗 スレッドを開く</a>}
+                  {/* 1. 前回アクションの確認 */}
+                  {agendaDetail.prevAgenda && agendaDetail.prevAgenda !== 'なし' && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div className="sh" style={{ marginBottom: 6 }}>1. 前回アクションの確認</div>
+                      <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, padding: '10px 12px', fontSize: 11, lineHeight: 1.7, color: 'var(--ink2)', whiteSpace: 'pre-wrap' as const }}>{agendaDetail.prevAgenda}</div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* 2. 施策別タスク一覧 */}
+                  <div style={{ marginBottom: 14 }}>
+                    <div className="sh" style={{ marginBottom: 6 }}>2. 施策別タスク一覧</div>
+                    {agendaDetail.categoryOrder.length === 0 && <div style={{ fontSize: 11, color: 'var(--muted)' }}>アクティブなタスクはありません</div>}
+                    {agendaDetail.categoryOrder.map((c: string) => (
+                      <div key={c} style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink2)', marginBottom: 4 }}>{c}</div>
+                        {agendaDetail.byCategory[c].map((it: any, i: number) => renderAgendaCard(it, `cat-${c}-${i}`))}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 3. 課題・意思決定事項 */}
+                  {agendaDetail.decision.length > 0 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div className="sh" style={{ marginBottom: 6 }}>3. 課題・意思決定事項</div>
+                      {agendaDetail.decision.map((it: any, i: number) => renderAgendaCard(it, `dec-${i}`))}
+                    </div>
+                  )}
+
+                  {/* 4. 次週アクション */}
+                  {agendaDetail.nextWeek.length > 0 && (
+                    <div>
+                      <div className="sh" style={{ marginBottom: 6 }}>4. 次週アクション（7日以内）</div>
+                      {agendaDetail.nextWeek.map((it: any, i: number) => renderAgendaCard(it, `nw-${i}`))}
+                    </div>
+                  )}
                 </div>
+              ) : (
+                <div style={{ padding: '14px 16px', fontSize: 12, color: 'var(--muted)' }}>詳細データがありません</div>
               )}
             </div>
           )}
