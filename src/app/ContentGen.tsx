@@ -65,10 +65,10 @@ const safeBullets = (v: any): string[] => safeText(v).split(/\n|・/).map(s => s
 
 export default function ContentGen() {
   const [text, setText] = useState('')
-  const [step, setStep] = useState<'input'|'planning'|'structure'|'editing'|'writing'|'done'>('input')
+  const [step, setStep] = useState<'input'|'planning'|'editing'|'writing'|'done'>('input')
   const [plans, setPlans] = useState<Plan[]>([])
-  const [structuredPlans, setStructuredPlans] = useState<Plan[]>([])
-  const [isRenderError, setIsRenderError] = useState(false)
+  const [expandedStruct, setExpandedStruct] = useState<Set<number>>(new Set())
+  const toggleStruct = (i: number) => setExpandedStruct(s => { const n = new Set(s); if (n.has(i)) n.delete(i); else n.add(i); return n })
   const [editedPlans, setEditedPlans] = useState<EditedPlan[]>([])
   const [results, setResults] = useState<FinalResult[]>([])
   const [selectedResult, setSelectedResult] = useState(0)
@@ -557,7 +557,14 @@ ${publishTarget === 'kato_note' ? `
 「現場で語られた課題 × 自社の強み × 競合との差 × 加藤CEOの発信テーマ軸」が交差する企画が最も価値が高いです。
 NG表現が企画タイトル・切り口・核心に含まれていないことを必ず確認してください。
 特定の企業名・顧客名・個人名は使わないこと。業界・市場・ターゲット層として抽象化すること。
-JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心","persona":"中小工務店経営者 | 設計事務所経営者 | 大手ディベロッパーDX担当者 のいずれか","stage":"日常 | 課題認知 | きっかけ | 自分事化 | 比較検討 | 商談・アポ | 導入・伴走 のいずれか","ceoAngle":"この企画で使う加藤CEO的な視点・比喩・語り口を1〜2文で"}]}`,
+
+各企画について、記事の構成まで一気に設計してください：
+・顕在ニーズ：読者が検索時に意識しているニーズ
+・潜在ニーズ：読者が自覚していない本当の欲求
+・記事目次は大見出し＋小見出しの2階層・10章以内
+・企画の方向性（切り口・核心）と構成（ニーズ・ゴール・目次）が一貫するように生成すること
+
+JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心","persona":"中小工務店経営者 | 設計事務所経営者 | 大手ディベロッパーDX担当者 のいずれか","stage":"日常 | 課題認知 | きっかけ | 自分事化 | 比較検討 | 商談・アポ | 導入・伴走 のいずれか","ceoAngle":"この企画で使う加藤CEO的な視点・比喩・語り口を1〜2文で","needsManifest":"【顕在ニーズ】箇条書き（・で区切る）","needsLatent":"【潜在ニーズ】箇条書き（・で区切る）","userGoal":"読者が得られる結果（2〜3文）","story":"必要な要素とストーリー（箇条書き3〜5点）","outline":[{"heading":"大見出し","subheadings":["小見出し"]}]}]}`,
         `以下の情報から発信企画を${planCount}つ考えてください。${pastPlans}
 
 【今回の入力資料】
@@ -575,7 +582,7 @@ ${knowledge.persona}` : ''}
 ${sanitizedCompetitive ? `【競合情報】
 ${sanitizedCompetitive}` : ''}`
       )
-      setPlans(result.plans)
+      setPlans((result.plans || []).map(normalizeStructuredPlan))
     } catch (e) {
       setError('企画生成に失敗しました。'); setStep('input')
     } finally {
@@ -601,71 +608,6 @@ ${sanitizedCompetitive}` : ''}`
     ),
   })
 
-  // STEP2: 構成エージェント
-  const runStructure = async (sourcePlans?: Plan[]) => {
-    setError(''); setLoading(true); setStep('structure'); setIsRenderError(false)
-    const selectedPlans = sourcePlans ?? plans.filter((_, i) => selectedPlanIndices.has(i))
-    try {
-      const batchSize = 3
-      const all: any[] = []
-      for (let i = 0; i < selectedPlans.length; i += batchSize) {
-        const batch = selectedPlans.slice(i, i + batchSize)
-        const res = await fetch('/api/claude', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 4000,
-            system: `あなたはSAMURAI ARCHITECTSのコンテンツ構成担当AIです。
-以下の企画骨子をもとに記事の構成を設計してください。
-
-・顕在ニーズ：読者が検索・調べる時に意識しているニーズ
-・潜在ニーズ：読者が自覚していない本当の欲求
-・記事目次は大見出し＋小見出しの2階層で、章は10章以内に収めること
-
-JSONのみ返してください：
-{"structuredPlans":[{
-  "title": "企画タイトルそのまま",
-  "needsManifest": "【顕在ニーズ】箇条書き（・で区切る）",
-  "needsLatent": "【潜在ニーズ】箇条書き（・で区切る）",
-  "userGoal": "読者が記事を読み終えた時に得られる最高の結果・変化（2〜3文）",
-  "story": "ゴールに到達するために必要な要素と構成（箇条書き3〜5点）",
-  "outline": [
-    {
-      "heading": "1、大見出し",
-      "subheadings": ["1−1、小見出し", "1−2、小見出し"]
-    }
-  ]
-}]}
-
-企画骨子：${JSON.stringify(batch)}`,
-            messages: [{ role: 'user', content: JSON.stringify(batch) }]
-          })
-        })
-        const data = await res.json().catch(() => ({}))
-        const rawText = data?.content?.find((c: any) => c?.type === 'text')?.text || ''
-        console.log('[runStructure] raw response:', typeof rawText === 'string' ? rawText.slice(0, 2000) : rawText)
-        let parsed: any = null
-        try { parsed = JSON.parse(String(rawText).replace(/```json|```/g, '').trim()) }
-        catch (pe) { console.error('[runStructure] JSON parse error:', pe, 'raw:', rawText) }
-        if (parsed && Array.isArray(parsed.structuredPlans)) all.push(...parsed.structuredPlans)
-      }
-      // 構成フィールドを元の企画にマージ（タイトルで照合）し、必ず正規化してからセット
-      const merged: Plan[] = selectedPlans.map(p => {
-        const s = all.find((x: any) => x && x.title === p.title) || {}
-        return normalizeStructuredPlan({ ...p, needsManifest: s.needsManifest, needsLatent: s.needsLatent, userGoal: s.userGoal, story: s.story, outline: s.outline })
-      })
-      setStructuredPlans(merged)
-    } catch (e) {
-      // 失敗時は構成ステップに留まり、構成なしの生プランで編集へスキップできるようにする
-      console.error('[runStructure] error:', e)
-      setError('構成生成に失敗しました。構成なしのまま編集へ進むこともできます。')
-      setStructuredPlans(selectedPlans.map(normalizeStructuredPlan))
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const runEditing = async () => {
     setError(''); setLoading(true); setStep('editing')
     try {
@@ -675,8 +617,8 @@ JSONのみ返してください：
       const pastNg = exData.length > 0
         ? `\n\n【蓄積されたNG表現（必ず避けてください）】\n${[...new Set(exData.flatMap((e: any) => (e.items || []).filter((i: any) => i.judgment === 'NG').map((i: any) => i.expression || '')))].filter(Boolean).slice(0, 30).map((s: any) => `・${s}`).join('\n')}`
         : ''
-      // 構成エージェントの出力（構成フィールド付き）を編集対象にする
-      const selectedPlans = structuredPlans
+      // 企画・構成エージェントで選択された企画（構成フィールド付き）を編集対象にする
+      const selectedPlans = plans.filter((_, i) => selectedPlanIndices.has(i))
       const batchSize = 3
       const allEditedPlans: any[] = []
       for (let i = 0; i < selectedPlans.length; i += batchSize) {
@@ -755,8 +697,8 @@ markdownは使わない。記号は①②③と・のみ。`,
         allEditedPlans.push(...(batchResult.editedPlans || []))
       }
       const plansWithJudgment = allEditedPlans.map((p: any) => {
-        // 構成エージェントの構成フィールドをタイトルで照合してマージ（編集出力には無いため保持）
-        const src = structuredPlans.find(sp => sp.title === p.title) || {}
+        // 企画の構成フィールドをタイトルで照合してマージ（編集出力には無いため保持）
+        const src = selectedPlans.find(sp => sp.title === p.title) || {}
         return {
           ...src,
           ...p,
@@ -835,29 +777,13 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
 
   const stepLabel: Record<string, string> = {
     input: '① MTGデータ入力',
-    planning: '② 企画エージェント',
-    structure: '③ 構成エージェント',
-    editing: '④ 編集エージェント',
-    writing: '⑤ 執筆エージェント',
+    planning: '② 企画・構成エージェント',
+    editing: '③ 編集エージェント',
+    writing: '④ 執筆エージェント',
     done: '✓ 完了'
   }
 
   const r = results[selectedResult]
-
-  // 構成ステップ表示前に structuredPlans の健全性を検証。問題があれば描画せずエラー表示に切り替える
-  useEffect(() => {
-    if (step !== 'structure') { setIsRenderError(false); return }
-    try {
-      structuredPlans.forEach(p => {
-        safeBullets(p.needsManifest); safeBullets(p.needsLatent); safeText(p.userGoal); safeBullets(p.story)
-        safeArr(p.outline).forEach((o: any) => { safeText(typeof o === 'string' ? o : o?.heading); safeArr(typeof o === 'string' ? [] : o?.subheadings) })
-      })
-      setIsRenderError(false)
-    } catch (e) {
-      console.error('[structure] render validation error:', e)
-      setIsRenderError(true)
-    }
-  }, [structuredPlans, step])
 
   return (
     <div style={{ maxWidth: 820 }}>
@@ -867,7 +793,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           {showHistory ? '← 生成に戻る' : '📚 過去の企画履歴'}
         </button>
       </div>
-      <div className="pg-sub">企画 → 構成 → 編集 → 執筆の4エージェントがMTGから発信コンテンツを自動生成します</div>
+      <div className="pg-sub">企画・構成 → 編集 → 執筆の3エージェントがMTGから発信コンテンツを自動生成します</div>
 
       {/* 履歴ビュー */}
       {showHistory && (
@@ -910,17 +836,14 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
       {showHistory && selectedHistoryPlans.length > 0 && (
         <div style={{ position: 'sticky', bottom: 0, padding: '12px 0', background: 'var(--bg)' }}>
           <button onClick={() => {
-              const picked: Plan[] = selectedHistoryPlans.map(({ _key, ...p }) => p)
+              const picked: Plan[] = selectedHistoryPlans.map(({ _key, ...p }) => normalizeStructuredPlan(p))
               setShowHistory(false)
               setPlans(picked)
               setSelectedPlanIndices(new Set(picked.map((_, i) => i)))
-              // 旧スキーマ（構成フィールドなし）は自動で構成生成。構成済みならそのまま表示
-              const hasStructure = picked.length > 0 && picked.every(p => p.needsManifest || p.needsLatent || (Array.isArray(p.outline) && p.outline.length > 0))
-              if (hasStructure) { setIsRenderError(false); setStructuredPlans(picked.map(normalizeStructuredPlan)); setStep('structure') }
-              else { runStructure(picked) }
+              setStep('planning')
             }}
             style={{ width: '100%', padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-            🧩 選択した{selectedHistoryPlans.length}件を構成エージェントに渡す
+            ✍️ 選択した{selectedHistoryPlans.length}件を企画に渡す
           </button>
         </div>
       )}
@@ -928,8 +851,8 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
       {!showHistory && <>
       {/* ステップインジケーター */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 20 }}>
-        {(['input','planning','structure','editing','writing','done'] as const).map((s, i) => {
-          const steps = ['input','planning','structure','editing','writing','done']
+        {(['input','planning','editing','writing','done'] as const).map((s, i) => {
+          const steps = ['input','planning','editing','writing','done']
           const current = steps.indexOf(step)
           const thisIdx = steps.indexOf(s)
           const isDone = thisIdx < current
@@ -942,7 +865,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                 color: isActive ? '#fff' : isDone ? 'var(--green)' : 'var(--muted)',
                 border: `0.5px solid ${isActive ? 'var(--ink)' : isDone ? 'var(--green)' : 'var(--b1)'}`
               }}>{stepLabel[s]}</div>
-              {i < 5 && <div style={{ width: 12, height: 0.5, background: 'var(--b1)' }} />}
+              {i < 4 && <div style={{ width: 12, height: 0.5, background: 'var(--b1)' }} />}
             </div>
           )
         })}
@@ -1000,14 +923,21 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
         <div>
           <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16, marginBottom: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 12 }}>企画エージェントの出力 — {plans.length}件</div>
-            {plans.map((p, i) => (
+            {plans.map((p, i) => {
+              const manifest = safeBullets(p.needsManifest)
+              const latent = safeBullets(p.needsLatent)
+              const goal = safeText(p.userGoal)
+              const storyBullets = safeBullets(p.story)
+              const outline = safeArr(p.outline)
+              const hasStruct = manifest.length > 0 || latent.length > 0 || !!goal || storyBullets.length > 0 || outline.length > 0
+              return (
               <div key={i} onClick={() => setSelectedPlanIndices(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s })}
                 style={{ background: selectedPlanIndices.has(i) ? 'var(--gbg)' : 'var(--bg)', borderRadius: 'var(--r)', padding: 12, marginBottom: 8, cursor: 'pointer', border: selectedPlanIndices.has(i) ? '1px solid var(--green)' : '1px solid transparent' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                   <div style={{ width: 16, height: 16, borderRadius: 3, border: '1.5px solid var(--b1)', background: selectedPlanIndices.has(i) ? 'var(--green)' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     {selectedPlanIndices.has(i) && <span style={{ color: 'white', fontSize: 10, fontWeight: 700 }}>✓</span>}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>企画{i+1}: {p.title}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>企画{i+1}: {safeText(p.title)}</div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                   {[['想定読者', p.target], ['切り口', p.angle], ['伝えたい核心', p.point]].map(([label, val]) => (
@@ -1024,8 +954,36 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                     {p.ceoAngle && <div style={{ fontSize: 11 }}><span style={{ fontWeight: 600, color: 'var(--muted)' }}>加藤CEO視点：</span><span style={{ color: 'var(--ink2)' }}>{p.ceoAngle}</span></div>}
                   </div>
                 )}
+                {hasStruct && (
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: '0.5px solid var(--b1)' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span onClick={() => toggleStruct(i)} style={{ cursor: 'pointer', fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>{expandedStruct.has(i) ? '▼' : '▶'} 構成（ニーズ・ゴール・目次）</span>
+                      <button onClick={() => copyStructure(i, p)} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 10, border: '0.5px solid ' + (copiedStructIdx === i ? 'var(--green)' : 'var(--b1)'), background: copiedStructIdx === i ? 'var(--gbg)' : 'var(--paper)', color: copiedStructIdx === i ? 'var(--green)' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const }}>{copiedStructIdx === i ? '✓ コピーしました' : '📋 コピー'}</button>
+                    </div>
+                    {expandedStruct.has(i) && (
+                      <div style={{ marginTop: 6 }}>
+                        {(manifest.length > 0 || latent.length > 0) && <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>想定されるニーズ</div>}
+                        {manifest.length > 0 && <div style={{ marginBottom: 4 }}><div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)' }}>【顕在ニーズ】</div>{manifest.map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}</div>}
+                        {latent.length > 0 && <div style={{ marginBottom: 6 }}><div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)' }}>【潜在ニーズ】</div>{latent.map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}</div>}
+                        {goal && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>ゴール・得られる結果</div><div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 6, lineHeight: 1.6 }}>{goal}</div></>}
+                        {storyBullets.length > 0 && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>要素とストーリー</div><div style={{ marginBottom: 6 }}>{storyBullets.map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}</div></>}
+                        {outline.length > 0 && <div><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>記事目次</div>{outline.map((o: any, j: number) => {
+                          const heading = typeof o === 'string' ? o : safeText(o?.heading)
+                          const subs = typeof o === 'string' ? [] : safeArr(o?.subheadings)
+                          return (
+                            <div key={j} style={{ marginBottom: 4 }}>
+                              {heading && <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{heading}</div>}
+                              {subs.map((sh: any, k: number) => <div key={k} style={{ fontSize: 11, color: 'var(--ink2)', paddingLeft: 14, lineHeight: 1.6 }}>{safeText(sh)}</div>)}
+                            </div>
+                          )
+                        })}</div>}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            ))}
+              )
+            })}
           </div>
           {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
@@ -1035,101 +993,11 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setStep('input')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← やり直す</button>
-            <button onClick={() => runStructure()} disabled={loading || selectedPlanIndices.size === 0} style={{ flex: 1, padding: 10, background: selectedPlanIndices.size > 0 ? 'var(--ink)' : 'var(--muted)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: selectedPlanIndices.size > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
-              🧩 選択した{selectedPlanIndices.size}件を構成
+            <button onClick={runEditing} disabled={loading || selectedPlanIndices.size === 0} style={{ flex: 1, padding: 10, background: selectedPlanIndices.size > 0 ? 'var(--ink)' : 'var(--muted)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: selectedPlanIndices.size > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+              ✍️ 選択した{selectedPlanIndices.size}件を編集
             </button>
           </div>
         </div>
-      )}
-
-      {/* STEP: 構成結果 */}
-      {step === 'structure' && !loading && (
-        isRenderError ? (
-          <div>
-            <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16, marginBottom: 12, fontSize: 12, color: 'var(--red)' }}>構成の表示に失敗しました。編集エージェントへスキップできます。</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setStep('planning')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← 企画に戻る</button>
-              <button onClick={runEditing} disabled={loading} style={{ flex: 1, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>✍️ 編集エージェントへスキップ</button>
-            </div>
-          </div>
-        ) : structuredPlans.length > 0 ? (
-        <div>
-          <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16, marginBottom: 12 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 12 }}>構成エージェントの出力</div>
-            {structuredPlans.map((p, i) => {
-              const manifest = safeBullets(p.needsManifest)
-              const latent = safeBullets(p.needsLatent)
-              const legacyNeeds = safeText(p.needs)
-              const goal = safeText(p.userGoal)
-              const storyBullets = safeBullets(p.story)
-              const outline = safeArr(p.outline)
-              return (
-              <div key={i} style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: 12, marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>企画{i+1}: {safeText(p.title)}</div>
-                  <button onClick={() => copyStructure(i, p)}
-                    style={{ fontSize: 10, padding: '3px 10px', borderRadius: 10, border: '0.5px solid ' + (copiedStructIdx === i ? 'var(--green)' : 'var(--b1)'), background: copiedStructIdx === i ? 'var(--gbg)' : 'var(--paper)', color: copiedStructIdx === i ? 'var(--green)' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const, flexShrink: 0 }}>
-                    {copiedStructIdx === i ? '✓ コピーしました' : '📋 コピー'}
-                  </button>
-                </div>
-
-                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>想定されるニーズ</div>
-                {manifest.length > 0 && (
-                  <div style={{ marginBottom: 6 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)' }}>【顕在ニーズ】</div>
-                    {manifest.map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
-                  </div>
-                )}
-                {latent.length > 0 && (
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink2)' }}>【潜在ニーズ】</div>
-                    {latent.map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
-                  </div>
-                )}
-                {/* 旧データ後方互換 */}
-                {manifest.length === 0 && latent.length === 0 && legacyNeeds && <div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{legacyNeeds}</div>}
-
-                {goal && <><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>ユーザーのゴール・得られる結果</div><div style={{ fontSize: 12, color: 'var(--ink2)', marginBottom: 8, lineHeight: 1.6 }}>{goal}</div></>}
-
-                {storyBullets.length > 0 && (
-                  <>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>必要な要素とストーリー</div>
-                    <div style={{ marginBottom: 8 }}>
-                      {storyBullets.map((s, k) => <div key={k} style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6, paddingLeft: 8 }}>・{s}</div>)}
-                    </div>
-                  </>
-                )}
-
-                {outline.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>記事目次</div>
-                    {outline.map((o: any, j: number) => {
-                      const heading = typeof o === 'string' ? o : safeText(o?.heading)
-                      const subs = typeof o === 'string' ? [] : safeArr(o?.subheadings)
-                      const desc = typeof o === 'string' ? '' : safeText(o?.description)
-                      return (
-                        <div key={j} style={{ marginBottom: 4 }}>
-                          {heading && <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{heading}</div>}
-                          {subs.map((sh: any, k: number) => <div key={k} style={{ fontSize: 11, color: 'var(--ink2)', paddingLeft: 14, lineHeight: 1.6 }}>{safeText(sh)}</div>)}
-                          {desc && <div style={{ fontSize: 10, color: 'var(--muted)', paddingLeft: 14, marginTop: 1 }}>{desc}</div>}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-              )
-            })}
-          </div>
-          {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{error}</div>}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setStep('planning')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← 企画に戻る</button>
-            <button onClick={runEditing} disabled={loading} style={{ flex: 1, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              ✍️ 編集エージェントへ進む
-            </button>
-          </div>
-        </div>
-        ) : null
       )}
 
       {/* STEP3: 編集結果 */}
@@ -1191,7 +1059,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             <button onClick={() => exportWord('企画・編集チェック', editSections(editedPlans))} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setStep('structure')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← 構成に戻る</button>
+            <button onClick={() => setStep('planning')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← 企画に戻る</button>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
               {(['both', 'x', 'note'] as const).map(mode => (
                 <button key={mode} onClick={() => setWritingMode(mode)}
@@ -1212,7 +1080,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
         <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 32, textAlign: 'center' as const }}>
           <div style={{ fontSize: 24, marginBottom: 8 }}>🤖</div>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-            {step === 'planning' ? '企画エージェントが考えています...' : step === 'structure' ? '構成エージェントが設計しています...' : step === 'editing' ? '編集エージェントがチェックしています...' : '執筆エージェントが書いています...'}
+            {step === 'planning' ? '企画・構成エージェントが考えています...' : step === 'editing' ? '編集エージェントがチェックしています...' : '執筆エージェントが書いています...'}
           </div>
           <div style={{ fontSize: 11, color: 'var(--muted)' }}>少々お待ちください</div>
         </div>
@@ -1227,7 +1095,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             <button onClick={() => { const t = writingMode==='note'&&results[selectedResult]?.content?.noteTitle||'発信コンテンツ一式'; exportPDF(t, writingSections(results, writingMode)) }} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
             <button onClick={() => { const t = writingMode==='note'&&results[selectedResult]?.content?.noteTitle||'発信コンテンツ一式'; exportWord(t, writingSections(results, writingMode)) }} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
             <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => { setStep('input'); setPlans([]); setStructuredPlans([]); setEditedPlans([]); setResults([]); setText('') }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>最初からやり直す</button>
+            <button onClick={() => { setStep('input'); setPlans([]); setEditedPlans([]); setResults([]); setText('') }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>最初からやり直す</button>
           </div>
           </div>
           </div>
