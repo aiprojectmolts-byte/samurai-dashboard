@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react'
 type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
 
 interface Task {
+  id?: string
   施策: string
   name: string
   s: string
@@ -19,6 +20,7 @@ interface Task {
   備考?: string
   背景?: string
   背景ソース?: string
+  phase?: string
 }
 
 const defaultTasks: Task[] = [
@@ -153,6 +155,9 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
   const [confirmError, setConfirmError] = useState('')
   const [pastAgendas, setPastAgendas] = useState<any[]>([])
   const [expandedAgenda, setExpandedAgenda] = useState<number | null>(null)
+  const [phases, setPhases] = useState<{ id: string; name: string; order: number }[]>([])
+  const [expandedBg, setExpandedBg] = useState<Set<string>>(new Set())
+  const toggleBg = (key: string) => setExpandedBg(s => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n })
 
   useEffect(() => {
     if (propTasks && propTasks.length > 0) setTasks(propTasks)
@@ -167,6 +172,18 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
   }
 
   useEffect(() => { loadPastAgendas() }, [])
+  useEffect(() => {
+    fetch('/api/phases').then(r => r.json()).then(d => { if (Array.isArray(d)) setPhases(d) }).catch(() => {})
+  }, [])
+
+  // フェーズ順 + 末尾に「未設定」。タスクの phase はフェーズID。未設定/不明は __none__
+  const orderedPhases = [...phases].sort((a, b) => (a.order || 0) - (b.order || 0))
+  const phaseMap = new Map(phases.map(p => [p.id, p]))
+  const phaseKeyOf = (t: Task) => (t.phase && phaseMap.has(t.phase)) ? t.phase : '__none__'
+  const phaseSlots: { key: string; name: string }[] = [
+    ...orderedPhases.map(p => ({ key: p.id, name: p.name })),
+    { key: '__none__', name: '未設定' },
+  ]
 
   const updateStatus = (taskName: string, st: TaskStatus) => {
     const updated = tasks.map(t => t.name === taskName ? { ...t, st } : t)
@@ -340,8 +357,6 @@ markdownは使わない。記号は・と①②③のみ。
   const agendaNonContent = ['対象タスクがありません', 'アジェンダの生成に失敗しました', 'アジェンダの生成中にエラーが発生しました']
   const isRealAgenda = agenda !== null && !agendaNonContent.includes(agenda)
 
-  const sakuGroups = buildGroups(filteredTasks)
-
   const renderBarCells = (s: string, e: string, st: TaskStatus, chg: boolean, isGroup = false) => {
     const si = weeks.findIndex(w => s <= w.end && e >= w.start)
     const ei = [...weeks].map((w, i) => ({ w, i })).reverse().find(({ w }) => s <= w.end && e >= w.start)?.i ?? -1
@@ -382,6 +397,9 @@ markdownは使わない。記号は・と①②③のみ。
         .g-mrow th { padding: 5px 0; text-align: center; font-size: 10px; font-weight: 600; color: var(--ink2); background: #fafaf9; border-bottom: 0.5px solid var(--b1); }
         .g-wrow th { padding: 3px 0; text-align: center; font-size: 10px; color: var(--muted); background: #fafaf9; border-bottom: 0.5px solid var(--b1); white-space: pre; line-height: 1.3; }
         .g-wrow th.cw { background: #f0f0ef; color: var(--ink2); font-weight: 600; }
+        .g-phase td { border-bottom: 0.5px solid var(--b1); border-top: 0.5px solid var(--b1); height: 30px; vertical-align: middle; padding: 0; background: #e7e7e4; }
+        .g-phase .t-label { background: #e7e7e4; font-size: 11px; font-weight: 700; color: var(--ink); letter-spacing: 0.02em; }
+        .g-phase .owner-cell, .g-phase .action-cell, .g-phase .phase-mid { background: #e7e7e4; }
         .g-group td { border-bottom: 0.5px solid var(--b1); height: 32px; vertical-align: middle; padding: 0; background: #fafaf9; }
         .g-row td { border-bottom: 0.5px solid var(--b2); height: 36px; vertical-align: middle; padding: 0; background: var(--paper); }
         .g-row:hover td { background: #fafaf9; }
@@ -483,52 +501,79 @@ markdownは使わない。記号は・と①②③のみ。
               </tr>
             </thead>
             <tbody>
-              {sakuGroups.map(施策 => {
-                const groupTasks = filteredTasks.filter(t => t.施策 === 施策)
-                const groupS = groupTasks.reduce((min, t) => t.s < min ? t.s : min, groupTasks[0].s)
-                const groupE = groupTasks.reduce((max, t) => t.e > max ? t.e : max, groupTasks[0].e)
-                const groupSt = groupTasks.reduce((worst, t) => {
-                  const p: Record<TaskStatus, number> = { waiting: 6, delayed: 5, doing: 4, review: 3, todo: 2, done: 1 }
-                  return p[t.st] > p[worst] ? t.st : worst
-                }, 'done' as TaskStatus)
-
+              {phaseSlots.map(ph => {
+                const phaseTasks = filteredTasks.filter(t => phaseKeyOf(t) === ph.key)
+                if (phaseTasks.length === 0) return null
+                const sakus = buildGroups(phaseTasks)
                 return (
-                  <React.Fragment key={"group-" + 施策}>
-                    {/* 施策グループ区切り行 */}
-                    <tr className="g-group">
-                      <td className="t-label">{施策}</td>
-                      {renderBarCells(groupS, groupE, groupSt, false, true)}
+                  <React.Fragment key={"phase-" + ph.key}>
+                    {/* フェーズ区切り行 */}
+                    <tr className="g-phase">
+                      <td className="t-label">{ph.name}</td>
+                      <td className="phase-mid" colSpan={weeks.length}></td>
                       <td className="owner-cell"></td>
                       <td className="action-cell"></td>
                     </tr>
 
-                    {/* 子タスク行 */}
-                    {groupTasks.map(t => (
-                      <tr key={t.name} className={`g-row${t.st === 'done' ? ' done-row' : ''}`}>
-                        <td className="t-label">
-                          <div className="row-inner">
-                            <div className={`t-check${t.st === 'done' ? ' done' : ''}`} onClick={() => toggleDone(t.name)}>
-                              {t.st === 'done' ? '✓' : ''}
-                            </div>
-                            <span className="t-name" title={t.name} onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span>
-                            {t.st === 'delayed' && <span className="delay-tag">遅れあり</span>}
-                            {t.chg && <span className="delay-tag">変更</span>}
-                          </div>
-                          {t.背景 && <div style={{ fontSize: 9, color: 'var(--muted)', whiteSpace: 'normal', lineHeight: 1.4, paddingLeft: 32, marginTop: 2 }}>背景：{t.背景}</div>}
-                        </td>
-                        {renderBarCells(t.s, t.e, t.st, t.chg)}
-                        <td className="owner-cell">
-                          <span className={`ob ${ownerClass[t.own]}`}>{t.assignee || ownerLabel[t.own]}</span>
-                        </td>
-                        <td className="action-cell">
-                          <select className="st-sel" value={t.st} onChange={e => updateStatus(t.name, e.target.value as TaskStatus)}>
-                            {Object.entries(statusLabel).map(([val, lbl]) => (
-                              <option key={val} value={val}>{lbl}</option>
-                            ))}
-                          </select>
-                        </td>
-                      </tr>
-                    ))}
+                    {sakus.map(施策 => {
+                      const groupTasks = phaseTasks.filter(t => t.施策 === 施策)
+                      const groupS = groupTasks.reduce((min, t) => t.s < min ? t.s : min, groupTasks[0].s)
+                      const groupE = groupTasks.reduce((max, t) => t.e > max ? t.e : max, groupTasks[0].e)
+                      const groupSt = groupTasks.reduce((worst, t) => {
+                        const p: Record<TaskStatus, number> = { waiting: 6, delayed: 5, doing: 4, review: 3, todo: 2, done: 1 }
+                        return p[t.st] > p[worst] ? t.st : worst
+                      }, 'done' as TaskStatus)
+
+                      return (
+                        <React.Fragment key={"group-" + ph.key + "-" + 施策}>
+                          {/* 施策グループ区切り行 */}
+                          <tr className="g-group">
+                            <td className="t-label">{施策}</td>
+                            {renderBarCells(groupS, groupE, groupSt, false, true)}
+                            <td className="owner-cell"></td>
+                            <td className="action-cell"></td>
+                          </tr>
+
+                          {/* 子タスク行 */}
+                          {groupTasks.map(t => {
+                            const k = t.id ?? t.name
+                            return (
+                              <tr key={k} className={`g-row${t.st === 'done' ? ' done-row' : ''}`}>
+                                <td className="t-label">
+                                  <div className="row-inner">
+                                    <div className={`t-check${t.st === 'done' ? ' done' : ''}`} onClick={() => toggleDone(t.name)}>
+                                      {t.st === 'done' ? '✓' : ''}
+                                    </div>
+                                    <span className="t-name" title={t.name} onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span>
+                                    {t.st === 'delayed' && <span className="delay-tag">遅れあり</span>}
+                                    {t.chg && <span className="delay-tag">変更</span>}
+                                  </div>
+                                  {t.背景 && (
+                                    <div style={{ paddingLeft: 32, marginTop: 2 }}>
+                                      <span onClick={() => toggleBg(k)} style={{ fontSize: 9, color: 'var(--muted)', cursor: 'pointer' }}>{expandedBg.has(k) ? '▼' : '▶'} 背景・追加経緯</span>
+                                      {expandedBg.has(k) && (
+                                        <div style={{ fontSize: 9, color: 'var(--muted)', whiteSpace: 'normal', lineHeight: 1.4, marginTop: 2 }}>背景：{t.背景}{t.背景ソース ? `（${t.背景ソース}）` : ''}</div>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                                {renderBarCells(t.s, t.e, t.st, t.chg)}
+                                <td className="owner-cell">
+                                  <span className={`ob ${ownerClass[t.own]}`}>{t.assignee || ownerLabel[t.own]}</span>
+                                </td>
+                                <td className="action-cell">
+                                  <select className="st-sel" value={t.st} onChange={e => updateStatus(t.name, e.target.value as TaskStatus)}>
+                                    {Object.entries(statusLabel).map(([val, lbl]) => (
+                                      <option key={val} value={val}>{lbl}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </React.Fragment>
+                      )
+                    })}
                   </React.Fragment>
                 )
               })}

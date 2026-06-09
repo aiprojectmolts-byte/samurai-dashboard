@@ -2,7 +2,7 @@
 import { useState, useRef } from 'react'
 
 type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
-interface Task { id?: string; 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string }
+interface Task { id?: string; 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string }
 interface Question { id: string; text: string; assignee: string; status: 'unanswered'|'answered'; priority: 'high'|'normal'; linkedTask: string; src: string; createdAt?: string }
 interface Extracted { summary: string; tasks: Task[]; questions: Question[]; knowledge?: any[] }
 interface ReviewDisplay { name: string; oldLabel: string; newLabel: string; outcome: '承認'|'FB'|'言及なし'; fbContent?: string }
@@ -81,7 +81,8 @@ export default function MtgImport() {
       "name": "タスク名（省略なし）",
       "deadline": "YYYY-MM-DD（言及があれば。なければ空文字）",
       "assignee": "担当者名（言及があれば）",
-      "category": "施策カテゴリ（あれば）"
+      "category": "施策カテゴリ（あれば）",
+      "背景": "このタスクが必要なビジネス上の理由（1〜2文）"
     }
   ],
   "questions": [
@@ -115,6 +116,10 @@ export default function MtgImport() {
 - 施策7: リファラル制度
 - 上記に当てはまらない場合は「施策X」
 
+背景の書き方:
+背景は「なぜこのタスクが必要かのビジネス上の理由」を1〜2文で表現し、最後は必ず「〜するため。」で終わること。
+例：計測基盤が整っていないと施策の効果が測れない。正確なKPI管理を可能にするため。
+
 ---
 ${text.slice(0, 8000)}`
           }]
@@ -138,6 +143,7 @@ ${text.slice(0, 8000)}`
         assignee: t.assignee || '',
         blocker: false,
         src,
+        背景: t.背景 || '',
       }))
 
       const extracted: Extracted = {

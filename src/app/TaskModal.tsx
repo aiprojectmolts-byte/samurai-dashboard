@@ -8,7 +8,7 @@ interface Task {
   id?: string
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
-  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string
+  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string
 }
 
 interface Members { samurai: string[]; molts: string[] }
@@ -33,10 +33,15 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
   const set = <K extends keyof Task>(k: K, v: Task[K]) => setForm(f => ({ ...f, [k]: v }))
 
   const [categories, setCategories] = useState<string[]>([])
+  const [phases, setPhases] = useState<{ id: string; name: string; order: number }[]>([])
   useEffect(() => {
     fetch('/api/categories')
       .then(r => r.json())
       .then((data: { id: string; name: string }[]) => { if (Array.isArray(data)) setCategories(data.map(c => c.name)) })
+      .catch(() => {})
+    fetch('/api/phases')
+      .then(r => r.json())
+      .then((data: { id: string; name: string; order: number }[]) => { if (Array.isArray(data)) setPhases([...data].sort((a, b) => (a.order || 0) - (b.order || 0))) })
       .catch(() => {})
   }, [])
 
@@ -59,6 +64,14 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
           <label style={lbl}>
             タスク名
             <input value={form.name} onChange={e => set('name', e.target.value)} style={inp} placeholder="例：事例1本目：取材・執筆・公開" autoFocus />
+          </label>
+
+          <label style={lbl}>
+            フェーズ
+            <select value={form.phase ?? ''} onChange={e => set('phase', e.target.value)} style={inp}>
+              <option value="">未設定</option>
+              {phases.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
           </label>
 
           <label style={lbl}>

@@ -11,6 +11,7 @@ import ContentGen from './ContentGen'
 import Knowledge from './Knowledge'
 import Competitors from './Competitors'
 import CategorySettings from './CategorySettings'
+import PhaseSettings from './PhaseSettings'
 
 import { useState, useEffect } from 'react'
 
@@ -32,6 +33,7 @@ interface Task {
   備考?: string
   背景?: string
   背景ソース?: string
+  phase?: string
 }
 
 const defaultTasks: Task[] = [
@@ -277,6 +279,7 @@ export default function Dashboard() {
           <div className="sb-div" />
           <div className="sb-grp">設定</div>
           <div className={`ni${view === 'settings' ? ' on' : ''}`} onClick={() => setView('settings')}>データ連携</div>
+          <div className={`ni${view === 'phase-settings' ? ' on' : ''}`} onClick={() => setView('phase-settings')}>フェーズ管理</div>
           <div className={`ni${view === 'category-settings' ? ' on' : ''}`} onClick={() => setView('category-settings')}>カテゴリ管理</div>
           <div className={`ni${view === 'mtg-import' ? ' on' : ''}
             {view === 'members' ? ' on' : ''}`} onClick={() => setView('members')}>メンバー管理</div>
@@ -468,6 +471,7 @@ export default function Dashboard() {
             {view === 'knowledge' && <Knowledge />}
             {view === 'competitors' && <Competitors />}
             {view === 'category-settings' && <CategorySettings onCategoryChange={reloadTasks} />}
+            {view === 'phase-settings' && <PhaseSettings onPhaseChange={reloadTasks} />}
             {view === 'members' && (
               <div>
                 <div className="pg-title">メンバー管理</div>
