@@ -2,7 +2,7 @@
 import { useState, useRef } from 'react'
 
 type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
-interface Task { id?: string; 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string }
+interface Task { id?: string; 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string; threadUrl?: string }
 interface Question { id: string; text: string; assignee: string; status: 'unanswered'|'answered'; priority: 'high'|'normal'; linkedTask: string; src: string; createdAt?: string }
 interface Extracted { summary: string; tasks: Task[]; questions: Question[]; knowledge?: any[] }
 interface ReviewDisplay { name: string; oldLabel: string; newLabel: string; outcome: '承認'|'FB'|'言及なし'; fbContent?: string }
@@ -331,90 +331,68 @@ JSONのみ返してください：
     setAgendaMessage('')
     setAgendaCopied(false)
     try {
-      const cut = new Date()
-      cut.setDate(cut.getDate() + 14) // 14日以内
-      const cutoff = cut.toISOString().slice(0, 10)
-
-      // 今回登録したタスクのうち期日が14日以内のもの（e は 'YYYY-MM-DD' 文字列）
-      const upcoming = addedTasks.filter(t => t.e && t.e >= today && t.e <= cutoff)
-
-      // 既存の定例確認タスク（review）
+      // 登録後の最新タスク一覧を取得（完了以外をアクティブとして扱う）
       const tRes = await fetch('/api/tasks')
       const fetched = await tRes.json().catch(() => [])
       const list: Task[] = Array.isArray(fetched) ? fetched : []
-      const reviewTasks = list.filter(t => t.st === 'review')
+      const activeTasks = list.filter(t => t.st !== 'done')
 
-      if (upcoming.length === 0 && reviewTasks.length === 0) {
+      // 前回確定アジェンダ（先頭1件）
+      let prevAgenda = 'なし'
+      try {
+        const aRes = await fetch('/api/agendas')
+        const aData = await aRes.json()
+        if (Array.isArray(aData) && aData[0]?.content) prevAgenda = aData[0].content
+      } catch {}
+
+      if (activeTasks.length === 0 && prevAgenda === 'なし') {
         setAgendaMessage('次回アジェンダの対象タスクはありません')
         return
       }
 
-      // メンバー一覧を取得（SAMURAI/THE MOLTS 振り分けに利用）
-      const mRes = await fetch('/api/members')
-      const mData = await mRes.json().catch(() => ({}))
-      const samuraiMembers = (mData?.samurai || []).join('、')
-      const moltsMembers = (mData?.molts || []).join('、')
-
       const teamName = (t: Task) => t.own === 'molts' ? 'THE MOLTS' : t.own === 'samurai' ? 'SAMURAI' : '共同'
-      const combined = {
-        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: ownerName(t), 担当チーム: teamName(t), 期限: t.e, 背景: t.背景 || '', 備考: t.備考 || '' })),
-        今週来週: upcoming.map(t => ({ name: t.name, assignee: ownerName(t), 担当チーム: teamName(t), 期限: t.e, 背景: t.背景 || '' })),
-      }
+      const stJp: Record<string, string> = { todo: '未着手', doing: '進行中', 'thread-review': 'スレッド確認中', review: '定例確認', done: '完了', waiting: '対応待ち', delayed: '遅れあり' }
+      const taskData = activeTasks.map(t => ({
+        name: t.name, assignee: ownerName(t), 担当チーム: teamName(t),
+        施策: t.施策 || '未分類', status: stJp[t.st] || t.st, 期限: t.e,
+        背景: t.背景 || '', 備考: t.備考 || '', threadUrl: t.threadUrl || '',
+      }))
 
-      const prompt = `以下のタスク一覧から、今日の定例で扱うべき項目を判断して
-アジェンダを作成してください。
+      const prompt = `以下のデータをもとに、週次定例MTGのアジェンダを作成してください。
 
 今日の日付：${today}
-タスク一覧（JSON）：${JSON.stringify(combined, null, 2)}
-
-【判断基準】
-各タスクについて以下の4つに分類してください：
-
-A. 今日決めること
-   → 定例確認ステータスのタスク
-   → 判断・承認がないと次に進めないもの
-   → 方向性の合意が必要なもの
-
-B. 情報・確認が必要なもの
-   → 不明点があって進められないもの
-   → 誰かの返答・確認待ちになっているもの
-   → 備考にFBがあるが対応が未完了のもの
-
-C. 課題・遅延の共有
-   → 期限超過しているもの
-   → ブロッカーがあるもの
-
-D. 通常進行中（除外）
-   → 問題なく進んでいるもの
-   → 今日の場で話す必要がないもの
-
-【重要】
-- DのタスクはアジェンダにNOT含めること
-- 単なる進捗報告はアジェンダに含めない
-- 各項目に「なぜ今日話す必要があるか」を1文で添えること
-- 背景フィールドがある場合はそれを根拠にすること
+タスク一覧（JSON）：${JSON.stringify(taskData, null, 2)}
+前回確定アジェンダ：${prevAgenda}
 
 【出力形式】
 markdownは使わない。記号は・と①②③のみ。
 
 📋 定例アジェンダ（${today}）
 
-1. 今日決めること
-・タスク名（担当）
-  背景：〇〇
-  今日話す理由：〇〇
+1. 前回アクションの確認
+前回アジェンダがある場合のみ出力。
+前回のネクストアクションがどうなったかを確認する項目を列挙。
+「なし」の場合はこのセクションを省略。
 
-2. 情報・確認が必要なもの
-・タスク名（担当）
-  背景：〇〇
-  確認したいこと：〇〇
+2. 施策別の進捗
+タスクを施策（カテゴリ）ごとにグループ化して表示。
+各施策の中でアクティブなタスク（完了以外）を示す。
+通常進行中は「進行中」と一言。課題があるものは詳しく。
+タスクがないカテゴリは省略。
 
-3. 課題・遅延
-・タスク名（担当）
-  状況：〇〇
+3. 課題・意思決定事項
+以下を分けて表示：
+【今日決めること】
+・定例確認ステータスのタスク + 背景 + 確認してほしいこと
+【Slackで確認中】
+・スレッド確認中ステータスのタスク + threadUrlがあればURL
 
-※ 対象が0件のセクションは省略すること
-※ 通常進行中のタスクは一切載せないこと`
+4. 次週アクション
+今日から7日以内に期限があるタスク（未完了）を列挙。
+担当者名を含める。
+
+※ 対象が0件のセクションは省略
+※ 通常進行中で課題がないタスクは施策別セクション以外に出さない`
 
       const aiRes = await fetch('/api/claude', {
         method: 'POST',

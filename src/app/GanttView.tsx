@@ -212,96 +212,81 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
 
       // 期限フィールド e は 'YYYY-MM-DD' 文字列。文字列比較で日付を判定できる
       const today = new Date().toISOString().slice(0, 10)
-      const cut = new Date()
-      cut.setDate(cut.getDate() + 14) // 今週・来週（2週間先まで）
-      const cutoff = cut.toISOString().slice(0, 10)
-
+      const cut7 = new Date(); cut7.setDate(cut7.getDate() + 7)
+      const cutoff7 = cut7.toISOString().slice(0, 10)
       const owner = (t: Task) => t.assignee || ownerLabel[t.own]
 
-      // b. 3グループに分類
+      // b. 分類（完了以外をアクティブとして扱う）
+      const activeTasks = list.filter(t => t.st !== 'done')
       const reviewTasks = list.filter(t => t.st === 'review')
-      const upcomingDoing = list.filter(t => t.st === 'doing' && t.e && t.e >= today && t.e <= cutoff)
-      const overdue = list.filter(t => t.st !== 'done' && t.st !== 'review' && t.e && t.e < today)
+      const threadTasks = list.filter(t => t.st === 'thread-review')
+      const nextWeek = list.filter(t => t.st !== 'done' && t.e && t.e >= today && t.e <= cutoff7)
 
-      // 全グループ0件
-      if (reviewTasks.length === 0 && upcomingDoing.length === 0 && overdue.length === 0) {
+      // 前回確定アジェンダ（先頭1件）
+      let prevAgenda = 'なし'
+      try {
+        const aRes = await fetch('/api/agendas')
+        const aData = await aRes.json()
+        if (Array.isArray(aData) && aData[0]?.content) prevAgenda = aData[0].content
+      } catch {}
+
+      if (activeTasks.length === 0 && prevAgenda === 'なし') {
         setAgenda('対象タスクがありません')
         setAgendaItems([])
         setAgendaLoading(false)
         return
       }
 
-      const classified = {
-        定例確認: reviewTasks.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e, 背景: t.背景 || '', 備考: t.備考 || '' })),
-        進行中_今週来週: upcomingDoing.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e, 背景: t.背景 || '' })),
-        遅延: overdue.map(t => ({ name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own], 期限: t.e, 背景: t.背景 || '' })),
-      }
+      const taskData = activeTasks.map(t => ({
+        name: t.name, assignee: owner(t), 担当チーム: ownerLabel[t.own],
+        施策: t.施策 || '未分類', status: statusLabel[t.st], 期限: t.e,
+        背景: t.背景 || '', 備考: t.備考 || '', threadUrl: t.threadUrl || '',
+      }))
 
-      // 詳細タブ用の構造化データ
-      const mkItem = (t: Task, section: string) => ({ section, name: t.name, assignee: owner(t), status: statusLabel[t.st], 背景: t.背景 || '', ソース: t.背景ソース || '', 確認ポイント: t.備考 || '' })
-      setAgendaItems([
-        ...reviewTasks.map(t => mkItem(t, '定例確認')),
-        ...upcomingDoing.map(t => mkItem(t, '今週・来週')),
-        ...overdue.map(t => mkItem(t, '遅延')),
-      ])
+      // 詳細タブ用の構造化データ（4セクション）
+      const items: any[] = []
+      if (prevAgenda !== 'なし') items.push({ section: '前回アクションの確認', name: '前回確定アジェンダのネクストアクションを確認する', assignee: '', status: '', 施策: '', 背景: '', 期限: '', 確認ポイント: '', threadUrl: '' })
+      activeTasks.forEach(t => items.push({ section: '施策別の進捗', name: t.name, assignee: owner(t), status: statusLabel[t.st], 施策: t.施策 || '未分類', 背景: t.背景 || '', 期限: t.e, 確認ポイント: '', threadUrl: '' }))
+      reviewTasks.forEach(t => items.push({ section: '今日決めること', name: t.name, assignee: owner(t), status: statusLabel[t.st], 施策: t.施策 || '未分類', 背景: t.背景 || '', 期限: t.e, 確認ポイント: t.備考 || '', threadUrl: '' }))
+      threadTasks.forEach(t => items.push({ section: 'Slackで確認中', name: t.name, assignee: owner(t), status: statusLabel[t.st], 施策: t.施策 || '未分類', 背景: t.背景 || '', 期限: t.e, 確認ポイント: t.備考 || '', threadUrl: t.threadUrl || '' }))
+      nextWeek.forEach(t => items.push({ section: '次週アクション', name: t.name, assignee: owner(t), status: statusLabel[t.st], 施策: t.施策 || '未分類', 背景: t.背景 || '', 期限: t.e, 確認ポイント: '', threadUrl: '' }))
+      setAgendaItems(items)
 
-      const samuraiMembers = (members?.samurai || []).join('、')
-      const moltsMembers = (members?.molts || []).join('、')
-
-      const prompt = `以下のタスク一覧から、今日の定例で扱うべき項目を判断して
-アジェンダを作成してください。
+      const prompt = `以下のデータをもとに、週次定例MTGのアジェンダを作成してください。
 
 今日の日付：${today}
-タスク一覧（JSON）：${JSON.stringify(classified, null, 2)}
-
-【判断基準】
-各タスクについて以下の4つに分類してください：
-
-A. 今日決めること
-   → 定例確認ステータスのタスク
-   → 判断・承認がないと次に進めないもの
-   → 方向性の合意が必要なもの
-
-B. 情報・確認が必要なもの
-   → 不明点があって進められないもの
-   → 誰かの返答・確認待ちになっているもの
-   → 備考にFBがあるが対応が未完了のもの
-
-C. 課題・遅延の共有
-   → 期限超過しているもの
-   → ブロッカーがあるもの
-
-D. 通常進行中（除外）
-   → 問題なく進んでいるもの
-   → 今日の場で話す必要がないもの
-
-【重要】
-- DのタスクはアジェンダにNOT含めること
-- 単なる進捗報告はアジェンダに含めない
-- 各項目に「なぜ今日話す必要があるか」を1文で添えること
-- 背景フィールドがある場合はそれを根拠にすること
+タスク一覧（JSON）：${JSON.stringify(taskData, null, 2)}
+前回確定アジェンダ：${prevAgenda}
 
 【出力形式】
 markdownは使わない。記号は・と①②③のみ。
 
 📋 定例アジェンダ（${today}）
 
-1. 今日決めること
-・タスク名（担当）
-  背景：〇〇
-  今日話す理由：〇〇
+1. 前回アクションの確認
+前回アジェンダがある場合のみ出力。
+前回のネクストアクションがどうなったかを確認する項目を列挙。
+「なし」の場合はこのセクションを省略。
 
-2. 情報・確認が必要なもの
-・タスク名（担当）
-  背景：〇〇
-  確認したいこと：〇〇
+2. 施策別の進捗
+タスクを施策（カテゴリ）ごとにグループ化して表示。
+各施策の中でアクティブなタスク（完了以外）を示す。
+通常進行中は「進行中」と一言。課題があるものは詳しく。
+タスクがないカテゴリは省略。
 
-3. 課題・遅延
-・タスク名（担当）
-  状況：〇〇
+3. 課題・意思決定事項
+以下を分けて表示：
+【今日決めること】
+・定例確認ステータスのタスク + 背景 + 確認してほしいこと
+【Slackで確認中】
+・スレッド確認中ステータスのタスク + threadUrlがあればURL
 
-※ 対象が0件のセクションは省略すること
-※ 通常進行中のタスクは一切載せないこと`
+4. 次週アクション
+今日から7日以内に期限があるタスク（未完了）を列挙。
+担当者名を含める。
+
+※ 対象が0件のセクションは省略
+※ 通常進行中で課題がないタスクは施策別セクション以外に出さない`
 
       // c. Claude に送信
       const aiRes = await fetch('/api/claude', {
@@ -309,7 +294,7 @@ markdownは使わない。記号は・と①②③のみ。
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 2000,
+          max_tokens: 2500,
           messages: [{ role: 'user', content: prompt }]
         })
       })
@@ -626,12 +611,14 @@ markdownは使わない。記号は・と①②③のみ。
                     <div key={i} style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, padding: '10px 12px', marginBottom: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
                         <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--muted)', background: 'var(--bg)', padding: '1px 6px', borderRadius: 3 }}>{it.section}</span>
+                        {it.施策 && <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--ink2)', background: '#f0f0ef', padding: '1px 6px', borderRadius: 3 }}>{it.施策}</span>}
                         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{it.name}</span>
-                        <span style={{ fontSize: 10, color: 'var(--muted)' }}>{it.assignee} ・ {it.status}</span>
+                        {(it.assignee || it.status) && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{[it.assignee, it.status].filter(Boolean).join(' ・ ')}</span>}
                       </div>
                       {it.背景 && <div style={{ fontSize: 11, color: 'var(--ink2)', marginTop: 2 }}>背景：{it.背景}</div>}
-                      {it.ソース && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>ソース：{it.ソース}</div>}
+                      {it.期限 && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>期限：{it.期限}</div>}
                       {it.確認ポイント && <div style={{ fontSize: 11, color: '#1d4ed8', marginTop: 2, whiteSpace: 'pre-wrap' as const }}>確認ポイント：{it.確認ポイント}</div>}
+                      {it.threadUrl && <a href={it.threadUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', fontSize: 10, color: '#6d28d9', marginTop: 3, textDecoration: 'none' }}>🔗 スレッドを開く</a>}
                     </div>
                   ))}
                 </div>

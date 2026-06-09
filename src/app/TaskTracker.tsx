@@ -110,6 +110,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
   const waiting = tasks.filter(t => t.st === 'waiting').length
   const delayed = tasks.filter(t => t.st === 'delayed').length
   const review = tasks.filter(t => t.st === 'review').length
+  const threadReview = tasks.filter(t => t.st === 'thread-review').length
   const doing = tasks.filter(t => t.st === 'doing').length
   const done = tasks.filter(t => t.st === 'done').length
 
@@ -210,8 +211,8 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
         </div>
       </div>
 
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
-        {[['対応待ち', waiting, 'var(--red)'], ['遅れあり', delayed, 'var(--orange)'], ['定例確認', review, '#1d4ed8'], ['進行中', doing, 'var(--yellow)'], ['完了', done, 'var(--green)']].map(([label, count, color]) => (
+      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(6,1fr)' }}>
+        {[['対応待ち', waiting, 'var(--red)'], ['遅れあり', delayed, 'var(--orange)'], ['スレッド確認中', threadReview, '#6d28d9'], ['定例確認', review, '#1d4ed8'], ['進行中', doing, 'var(--yellow)'], ['完了', done, 'var(--green)']].map(([label, count, color]) => (
           <div key={String(label)} className="sc">
             <div className="sc-ey">{label}</div>
             <div className="sc-v" style={{ color: String(color) }}>{count}</div>
