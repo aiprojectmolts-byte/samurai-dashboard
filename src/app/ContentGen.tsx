@@ -575,10 +575,10 @@ ${sanitizedCompetitive}` : ''}`
 
   // STEP2: 編集エージェント
   // STEP2: 構成エージェント
-  const runStructure = async () => {
+  const runStructure = async (sourcePlans?: Plan[]) => {
     setError(''); setLoading(true); setStep('structure')
+    const selectedPlans = sourcePlans ?? plans.filter((_, i) => selectedPlanIndices.has(i))
     try {
-      const selectedPlans = plans.filter((_, i) => selectedPlanIndices.has(i))
       const batchSize = 3
       const all: any[] = []
       for (let i = 0; i < selectedPlans.length; i += batchSize) {
@@ -618,7 +618,9 @@ JSONのみ返してください：
       })
       setStructuredPlans(merged)
     } catch (e) {
-      setError('構成生成に失敗しました。'); setStep('planning')
+      // 失敗時は構成ステップに留まり、構成なしの生プランで編集へスキップできるようにする
+      setError('構成生成に失敗しました。構成なしのまま編集へ進むこともできます。')
+      setStructuredPlans(selectedPlans)
     } finally {
       setLoading(false)
     }
@@ -852,9 +854,18 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
 
       {showHistory && selectedHistoryPlans.length > 0 && (
         <div style={{ position: 'sticky', bottom: 0, padding: '12px 0', background: 'var(--bg)' }}>
-          <button onClick={() => { setPlans(selectedHistoryPlans.map(({_key, ...p}) => p)); setSelectedPlanIndices(new Set(selectedHistoryPlans.map((_, i) => i))); setShowHistory(false); setStep('planning') }}
+          <button onClick={() => {
+              const picked: Plan[] = selectedHistoryPlans.map(({ _key, ...p }) => p)
+              setShowHistory(false)
+              setPlans(picked)
+              setSelectedPlanIndices(new Set(picked.map((_, i) => i)))
+              // 旧スキーマ（構成フィールドなし）は自動で構成生成。構成済みならそのまま表示
+              const hasStructure = picked.length > 0 && picked.every(p => p.needsManifest || p.needsLatent || (Array.isArray(p.outline) && p.outline.length > 0))
+              if (hasStructure) { setStructuredPlans(picked); setStep('structure') }
+              else { runStructure(picked) }
+            }}
             style={{ width: '100%', padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-            ✍️ 選択した{selectedHistoryPlans.length}件を編集に渡す
+            🧩 選択した{selectedHistoryPlans.length}件を構成エージェントに渡す
           </button>
         </div>
       )}
@@ -969,7 +980,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setStep('input')} style={{ padding: '8px 16px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>← やり直す</button>
-            <button onClick={runStructure} disabled={loading || selectedPlanIndices.size === 0} style={{ flex: 1, padding: 10, background: selectedPlanIndices.size > 0 ? 'var(--ink)' : 'var(--muted)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: selectedPlanIndices.size > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
+            <button onClick={() => runStructure()} disabled={loading || selectedPlanIndices.size === 0} style={{ flex: 1, padding: 10, background: selectedPlanIndices.size > 0 ? 'var(--ink)' : 'var(--muted)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: selectedPlanIndices.size > 0 ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
               🧩 選択した{selectedPlanIndices.size}件を構成
             </button>
           </div>
