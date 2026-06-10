@@ -30,18 +30,19 @@ export async function GET() {
   }
 }
 
-// クライアントが省略/null で送っても既存値を守るフィールド（空文字での消去も防ぐ）
+// マージで保護するフィールドはこの4つのみ。これら以外はクライアントの値をそのまま使う。
 const PROTECTED_FIELDS = ['背景', '背景ソース', 'label', 'linkedQuestionId']
 
 function mergeTask(existing: any, incoming: any) {
   if (!existing) return incoming // 新規タスク（既存IDなし）はそのまま追加
-  const out: any = { ...existing }
-  for (const [k, v] of Object.entries(incoming)) {
-    // クライアントが undefined / null で送ったフィールドは既存値を保持
-    if (v === undefined || v === null) continue
-    // 保護フィールドは空文字での上書き（消去）も防ぐ
-    if (PROTECTED_FIELDS.includes(k) && v === '') continue
-    out[k] = v
+  // name・st・assignee・日付・施策・phase 等はクライアントの編集内容をそのまま採用
+  const out: any = { ...incoming }
+  // 保護フィールドのみ、クライアントが未送信/空のときに既存値で補完（外部更新の巻き戻し防止）
+  for (const f of PROTECTED_FIELDS) {
+    const v = incoming[f]
+    if (v === undefined || v === null || v === '') {
+      if (existing[f] !== undefined) out[f] = existing[f]
+    }
   }
   return out
 }
