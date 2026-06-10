@@ -98,7 +98,17 @@ export default function Materials() {
         if (driveFileId) {
           // Google Drive：<video> 要素を iframe（preview）に置き換える
           const iframe = `<iframe src="https://drive.google.com/file/d/${driveFileId}/preview" width="100%" height="480" allow="autoplay"></iframe>`
-          html = html.replace(/<video[\s\S]*?<\/video>/gi, iframe)
+          // ① <video>...</video> 全体を完全に削除してから iframe を挿入（残らないようにする）
+          if (/<video[\s\S]*?<\/video>/i.test(html)) {
+            html = html.replace(/<video[\s\S]*?<\/video>/gi, iframe)
+          } else if (/<video\b[^>]*>/i.test(html)) {
+            // 閉じタグなし／自己閉じの場合
+            html = html.replace(/<video\b[^>]*\/?>/i, iframe)
+          }
+          // 念のため、残った <source>・</video> を除去
+          html = html.replace(/<source\b[^>]*\/?>/gi, '').replace(/<\/video>/gi, '')
+          // ② rec-status 要素を非表示（削除）
+          html = html.replace(/<p[^>]*id=["']rec-status["'][^>]*>[\s\S]*?<\/p>/, '')
           // Drive iframe では再生位置ジャンプができないため、タイムスタンプリンクを無効化
           html = html.replace(/onclick\s*=\s*(["'])[^"']*?(?:currentTime|seekTo|jumpTo|seek)[^"']*\1/gi, 'onclick="return false;"')
         } else if (videoUrl) {
