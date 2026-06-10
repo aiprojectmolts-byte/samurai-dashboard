@@ -99,15 +99,28 @@ export default function Materials() {
       if (type === 'html') {
         // ① 動画URL（手動入力 or ファイルアップロード）を確定
         let videoUrl = ''
+        let driveFileId = ''
         if (videoSource === 'url') {
           videoUrl = videoUrlInput.trim()
+          if (/drive\.google\.com/i.test(videoUrl)) {
+            // file/d/FILE_ID/view または ?id=FILE_ID から FILE_ID を抽出
+            const mm = videoUrl.match(/\/file\/d\/([^/]+)/) || videoUrl.match(/[?&]id=([^&]+)/)
+            driveFileId = mm ? mm[1] : ''
+          }
         } else if (videoFile) {
           setStage('uploading-video'); setPct(0)
           videoUrl = await xhrUpload(videoFile, videoFile.name, setPct)
         }
-        // ② HTMLを読み込み、動画srcを videoUrl に置換
+        // ② HTMLを読み込み、動画を置換
         let html = await (htmlFile as File).text()
-        if (videoUrl) {
+        if (driveFileId) {
+          // Google Drive：<video> 要素を iframe（preview）に置き換える
+          const iframe = `<iframe src="https://drive.google.com/file/d/${driveFileId}/preview" width="100%" height="480" allow="autoplay"></iframe>`
+          html = html.replace(/<video[\s\S]*?<\/video>/gi, iframe)
+          // Drive iframe では再生位置ジャンプができないため、タイムスタンプリンクを無効化
+          html = html.replace(/onclick\s*=\s*(["'])[^"']*?(?:currentTime|seekTo|jumpTo|seek)[^"']*\1/gi, 'onclick="return false;"')
+        } else if (videoUrl) {
+          // 直接動画URL（MP4等）：video src を置換
           html = html.replace(/((?:src|href)\s*=\s*)(["'])[^"']*\.(?:mp4|webm|mov|m4v|ogg)\2/gi, `$1$2${videoUrl}$2`)
         }
         // ③ 置換済みHTMLを Blob へアップロード
