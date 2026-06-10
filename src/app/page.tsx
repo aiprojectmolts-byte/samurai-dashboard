@@ -12,6 +12,7 @@ import Knowledge from './Knowledge'
 import Competitors from './Competitors'
 import CategorySettings from './CategorySettings'
 import PhaseSettings from './PhaseSettings'
+import Materials from './components/Materials'
 
 import { useState, useEffect } from 'react'
 
@@ -285,6 +286,7 @@ export default function Dashboard() {
           <div className={`ni${view === 'mtg-import' ? ' on' : ''}
             {view === 'members' ? ' on' : ''}`} onClick={() => setView('members')}>メンバー管理</div>
           <div className={`ni${view === 'slack' ? ' on' : ''}`} onClick={() => setView('slack')}>コミュニケーションログ</div>
+          <div className={`ni${view === 'materials' ? ' on' : ''}`} onClick={() => setView('materials')}>📄 資料</div>
           <div className={`ni${view === 'mtg-import' ? ' on' : ''}`} onClick={() => setView('mtg-import')}>MTGデータ取り込み</div>
           <div className={`ni${view === 'content-gen' ? ' on' : ''}`} onClick={() => setView('content-gen')}>発信コンテンツ生成</div>
           <div className={`ni${view === 'knowledge' ? ' on' : ''}`} onClick={() => setView('knowledge')}>ナレッジベース</div>
@@ -473,6 +475,7 @@ export default function Dashboard() {
             {view === 'competitors' && <Competitors />}
             {view === 'category-settings' && <CategorySettings onCategoryChange={reloadTasks} />}
             {view === 'phase-settings' && <PhaseSettings onPhaseChange={reloadTasks} />}
+            {view === 'materials' && <Materials />}
             {view === 'members' && (
               <div>
                 <div className="pg-title">メンバー管理</div>
