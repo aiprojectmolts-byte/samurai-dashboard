@@ -64,6 +64,23 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
 
   const allMembers = [...members.samurai, ...members.molts]
 
+  // 優先順のランク（小さいほど上位）
+  const priorityRank = (t: Task): number => {
+    const td = new Date(); td.setHours(0, 0, 0, 0)
+    const tStr = toYMD(td)
+    const d = new Date(td); d.setDate(d.getDate() + 7); const d7s = toYMD(d)
+    const overdue = t.st === 'delayed' || (!!t.e && t.e < tStr && t.st !== 'done')
+    const soon = !!t.e && t.e >= tStr && t.e <= d7s
+    const blocker = !!t.blocker
+    if (overdue && blocker) return 1
+    if (overdue) return 2
+    if (blocker && soon) return 3
+    if (blocker) return 4
+    if (soon) return 5
+    if (!t.e) return 7
+    return 6
+  }
+
   const filtered = [...tasks]
     .filter(t => filterStatus.size === 0 ? t.st !== 'done' : filterStatus.has(t.st))
     .filter(t => filterAssignee.size === 0 || (!!t.assignee && filterAssignee.has(t.assignee)))
@@ -72,6 +89,12 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
       if (sortBy === 'registered') {
         const ai = tasks.indexOf(a), bi = tasks.indexOf(b)
         return bi - ai  // 新しい順（末尾が新しい）
+      }
+      if (sortBy === 'priority') {
+        const ra = priorityRank(a), rb = priorityRank(b)
+        if (ra !== rb) return ra - rb
+        const ae = a.e || '9999-99-99', be = b.e || '9999-99-99'  // 同ランク内は期日順
+        return ae < be ? -1 : ae > be ? 1 : 0
       }
       if (sortBy === 'blocker' && (a.blocker ?? false) !== (b.blocker ?? false)) return a.blocker ? -1 : 1
       if (sortBy !== 'registered') {
@@ -208,7 +231,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>並び順</span>
-          {[['deadline', '期日順'], ['blocker', 'ブロッカー優先'], ['registered', '登録順']].map(([val, label]) => (
+          {[['registered', '登録順'], ['deadline', '期日順'], ['blocker', 'ブロッカー優先'], ['priority', '優先順']].map(([val, label]) => (
             <button key={val} onClick={() => setSortBy(val)} style={fbtn(sortBy === val)}>{label}</button>
           ))}
         </div>

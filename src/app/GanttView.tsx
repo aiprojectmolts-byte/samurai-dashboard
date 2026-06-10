@@ -130,6 +130,24 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
   const srcMatch = (t: Task, v: string) =>
     v === 'slack' ? t.src === 'slack' : v === 'fireflies' ? (!!t.src && t.src !== 'slack') : v === 'none' ? !t.src : true
 
+  // 優先順のランク（小さいほど上位）
+  const priorityRank = (t: Task): number => {
+    const td = new Date(); td.setHours(0, 0, 0, 0)
+    const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const tStr = ymd(td)
+    const d = new Date(td); d.setDate(d.getDate() + 7); const d7s = ymd(d)
+    const overdue = t.st === 'delayed' || (!!t.e && t.e < tStr && t.st !== 'done')
+    const soon = !!t.e && t.e >= tStr && t.e <= d7s
+    const blocker = !!t.blocker
+    if (overdue && blocker) return 1
+    if (overdue) return 2
+    if (blocker && soon) return 3
+    if (blocker) return 4
+    if (soon) return 5
+    if (!t.e) return 7
+    return 6
+  }
+
   const filteredTasks = [...tasks]
     .filter(t => filterStatus.size === 0 ? t.st !== 'done' : filterStatus.has(t.st))
     .filter(t => filterAssignee.size === 0 || (!!t.assignee && filterAssignee.has(t.assignee)))
@@ -138,6 +156,12 @@ export default function GanttView({ tasks: propTasks, members, onTasksChange, on
       if (sortBy === 'registered') {
         const ai = tasks.indexOf(a), bi = tasks.indexOf(b)
         return ai - bi
+      }
+      if (sortBy === 'priority') {
+        const ra = priorityRank(a), rb = priorityRank(b)
+        if (ra !== rb) return ra - rb
+        const ae = a.e || '9999-99-99', be = b.e || '9999-99-99'  // 同ランク内は期日順
+        return ae < be ? -1 : ae > be ? 1 : 0
       }
       if (sortBy === 'blocker') {
         if ((a.blocker ?? false) !== (b.blocker ?? false)) return a.blocker ? -1 : 1
@@ -472,7 +496,7 @@ n+2. クローズ
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>並び順</span>
-            {[['registered', '登録順'], ['deadline', '期日順'], ['blocker', 'ブロッカー優先']].map(([val, label]) => (
+            {[['registered', '登録順'], ['deadline', '期日順'], ['blocker', 'ブロッカー優先'], ['priority', '優先順']].map(([val, label]) => (
               <button key={val} onClick={() => setSortBy(val)} style={fbtn(sortBy === val)}>{label}</button>
             ))}
           </div>
