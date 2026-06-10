@@ -34,14 +34,19 @@ export default function Materials() {
   const [error, setError] = useState('')
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
-  const [type, setType] = useState<Material['type']>('html')
+  const [type, setType] = useState<Material['type'] | 'minutes'>('html')
   const [url, setUrl] = useState('')
   const [htmlFile, setHtmlFile] = useState<File | null>(null)
   const [videoSource, setVideoSource] = useState<'file' | 'url'>('file')
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [videoUrlInput, setVideoUrlInput] = useState('')
+  // MTG議事録（VTT生成）用
+  const [participants, setParticipants] = useState('')
+  const [vttFile, setVttFile] = useState<File | null>(null)
+  const [minutesVideoUrl, setMinutesVideoUrl] = useState('')
   const htmlRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLInputElement>(null)
+  const vttRef = useRef<HTMLInputElement>(null)
 
   const load = async () => {
     try {
@@ -56,6 +61,7 @@ export default function Materials() {
   const resetForm = () => {
     setTitle(''); setDate(new Date().toISOString().slice(0, 10)); setType('html')
     setUrl(''); setHtmlFile(null); setVideoFile(null); setVideoUrlInput(''); setVideoSource('file')
+    setParticipants(''); setVttFile(null); setMinutesVideoUrl('')
     setError(''); setStage('idle'); setPct(0)
   }
 
@@ -146,6 +152,37 @@ export default function Materials() {
     setBusy(false); setStage('idle'); setPct(0)
   }
 
+  const generateMinutes = async () => {
+    if (!title.trim() || !date) { setError('タイトルと日付を入力してください'); return }
+    if (!vttFile) { setError('VTTファイルを選択してください'); return }
+    setBusy(true); setError(''); setStage('saving')
+    try {
+      const vttContent = await vttFile.text()
+      const res = await fetch('/api/generate-minutes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vttContent, title: title.trim(), date, participants: participants.trim(), videoUrl: minutesVideoUrl.trim() || undefined }),
+      })
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        throw new Error(`生成失敗 (${res.status})${errText ? '：' + errText.slice(0, 300) : ''}`)
+      }
+      resetForm()
+      setShowForm(false)
+      await load()
+    } catch (e) {
+      console.error('[materials] generateMinutes error:', e)
+      setError('議事録の生成に失敗しました：' + String(e))
+    }
+    setBusy(false); setStage('idle')
+  }
+
+  const onVtt = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null
+    setVttFile(f)
+    if (f && !title) setTitle(f.name.replace(/\.vtt$/i, ''))
+  }
+
   const open = (m: Material) => {
     const href = m.type === 'html' ? `/api/materials/${m.id}` : (m.url || '')
     if (href) window.open(href, '_blank', 'noopener,noreferrer')
@@ -203,8 +240,9 @@ export default function Materials() {
                 <label style={lbl}>日付<input type="date" value={date} onChange={e => setDate(e.target.value)} style={inp} /></label>
                 <label style={lbl}>
                   タイプ
-                  <select value={type} onChange={e => setType(e.target.value as Material['type'])} style={inp}>
+                  <select value={type} onChange={e => setType(e.target.value as Material['type'] | 'minutes')} style={inp}>
                     <option value="html">HTML（ファイル）</option>
+                    <option value="minutes">MTG議事録（VTT生成）</option>
                     <option value="video">動画（URL）</option>
                     <option value="link">リンク（URL）</option>
                   </select>
@@ -241,13 +279,26 @@ export default function Materials() {
                     )}
                   </div>
                 </>
+              ) : type === 'minutes' ? (
+                <>
+                  <label style={lbl}>参加者<input value={participants} onChange={e => setParticipants(e.target.value)} style={inp} placeholder="例：田中、佐藤、山田" /></label>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>① VTTファイル（文字起こし）</div>
+                    <div onClick={() => vttRef.current?.click()} style={dropzone}>
+                      <div style={{ fontSize: 12, fontWeight: 500 }}>{vttFile ? `✓ ${vttFile.name}` : 'クリックしてVTTファイルを選択'}</div>
+                    </div>
+                    <input ref={vttRef} type="file" accept=".vtt,text/vtt" style={{ display: 'none' }} onChange={onVtt} />
+                  </div>
+                  <label style={lbl}>② 録画URL（任意・Google Drive / YouTube / 動画ファイル）<input value={minutesVideoUrl} onChange={e => setMinutesVideoUrl(e.target.value)} style={inp} placeholder="https://..." /></label>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>VTTをClaudeが解析し、サマリー・セクション・意思決定事項・ネクストアクションを含む議事録HTMLを自動生成します。</div>
+                </>
               ) : (
                 <label style={lbl}>URL<input value={url} onChange={e => setUrl(e.target.value)} style={inp} placeholder="https://..." /></label>
               )}
 
               {(stage !== 'idle' || error) && (
                 <div>
-                  {stage !== 'idle' && <div style={{ fontSize: 11, color: 'var(--ink2)', marginBottom: 4 }}>{stageMsg[stage]}{showBar ? ` ${pct}%` : ''}</div>}
+                  {stage !== 'idle' && <div style={{ fontSize: 11, color: 'var(--ink2)', marginBottom: 4 }}>{type === 'minutes' && stage === 'saving' ? 'Claude が議事録を生成中...' : stageMsg[stage]}{showBar ? ` ${pct}%` : ''}</div>}
                   {showBar && (
                     <div style={{ background: 'var(--b1)', borderRadius: 3, height: 6, overflow: 'hidden' }}>
                       <div style={{ width: pct + '%', height: '100%', background: 'var(--green)', borderRadius: 3, transition: 'width 0.2s' }} />
@@ -259,7 +310,7 @@ export default function Materials() {
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 18, justifyContent: 'flex-end' }}>
               <button onClick={() => setShowForm(false)} disabled={busy} style={{ padding: '6px 14px', background: 'none', border: '0.5px solid var(--b1)', color: 'var(--muted)', borderRadius: 'var(--r)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
-              <button onClick={add} disabled={busy} style={{ padding: '6px 16px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? 0.5 : 1 }}>{busy ? '処理中...' : 'アップロード'}</button>
+              <button onClick={type === 'minutes' ? generateMinutes : add} disabled={busy} style={{ padding: '6px 16px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? 0.5 : 1 }}>{type === 'minutes' ? (busy ? '生成中...' : '議事録を生成') : (busy ? '処理中...' : 'アップロード')}</button>
             </div>
           </div>
         </div>
