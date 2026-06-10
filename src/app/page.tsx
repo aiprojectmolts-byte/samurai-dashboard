@@ -37,6 +37,7 @@ interface Task {
   phase?: string
   threadUrl?: string
   linkedQuestionId?: string
+  label?: string
 }
 
 const defaultTasks: Task[] = [

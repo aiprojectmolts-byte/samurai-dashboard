@@ -23,6 +23,7 @@ interface Task {
   phase?: string
   threadUrl?: string
   linkedQuestionId?: string
+  label?: string
 }
 
 const defaultTasks: Task[] = [
@@ -558,6 +559,7 @@ n+2. クローズ
                                       {t.st === 'done' ? '✓' : ''}
                                     </div>
                                     <span className="t-name" title={t.name} onClick={() => onEditTask?.(t)} style={{cursor:"pointer"}}>{t.name}</span>
+                                    {t.label && <span style={{ fontSize: 9, background: '#f1f0eb', color: '#888', padding: '1px 6px', borderRadius: 3, fontWeight: 600, flexShrink: 0 }}>{t.label}</span>}
                                     {t.st === 'delayed' && <span className="delay-tag">遅れあり</span>}
                                     {t.chg && <span className="delay-tag">変更</span>}
                                     {t.st === 'thread-review' && t.threadUrl && <a href={t.threadUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 9, background: '#f5f3ff', color: '#6d28d9', padding: '1px 5px', borderRadius: 3, fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>🔗 スレッド</a>}

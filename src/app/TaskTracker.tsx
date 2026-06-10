@@ -6,7 +6,7 @@ interface Task {
   id?: string
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
-  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string; threadUrl?: string; linkedQuestionId?: string
+  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string; threadUrl?: string; linkedQuestionId?: string; label?: string
 }
 interface Members { samurai: string[]; molts: string[] }
 interface Props {
@@ -140,6 +140,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             {t.blocker && <span style={{ fontSize: 9, fontWeight: 700, background: 'var(--rbg)', color: 'var(--red)', padding: '1px 6px', borderRadius: 3 }}>ブロッカー</span>}
             <div className="it" style={{ cursor: 'pointer' }} onClick={() => onOpenModal(t)}>{t.name}</div>
+            {t.label && <span style={{ fontSize: 9, background: '#f1f0eb', color: '#888', padding: '1px 6px', borderRadius: 3, fontWeight: 600, flexShrink: 0 }}>{t.label}</span>}
           </div>
           <div className="im">
             <span className="stag">{t.施策}</span>

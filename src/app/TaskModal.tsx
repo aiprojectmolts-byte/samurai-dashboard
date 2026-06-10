@@ -8,7 +8,7 @@ interface Task {
   id?: string
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
-  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string; threadUrl?: string; linkedQuestionId?: string
+  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string; threadUrl?: string; linkedQuestionId?: string; label?: string
 }
 
 interface Members { samurai: string[]; molts: string[] }
@@ -79,6 +79,11 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
             <select value={form.施策} onChange={e => set('施策', e.target.value)} style={inp}>
               {categoryOptions.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
+          </label>
+
+          <label style={lbl}>
+            ラベル（任意）
+            <input value={form.label ?? ''} onChange={e => set('label', e.target.value)} style={inp} placeholder="例：6/10定例・6/17定例" />
           </label>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
