@@ -123,13 +123,8 @@ export default function Materials() {
           // 直接動画URL（MP4等）：video src を置換
           html = html.replace(/((?:src|href)\s*=\s*)(["'])[^"']*\.(?:mp4|webm|mov|m4v|ogg)\2/gi, `$1$2${videoUrl}$2`)
         }
-        // ③ 置換済みHTMLを Blob へアップロード
-        setStage('uploading-html'); setPct(0)
-        const cid = Date.now().toString() + Math.random().toString(36).slice(2)
-        const htmlBlob = new Blob([html], { type: 'text/html' })
-        const htmlUrl = await xhrUpload(htmlBlob, `${cid}.html`, setPct)
-        // ④ /api/materials にURL・メタデータのみ（JSON）
-        payload = { ...payload, htmlUrl, videoUrl }
+        // ③ 置換済みHTML本文を /api/materials へ送信（Redis保存）
+        payload = { ...payload, htmlContent: html, videoUrl }
       } else {
         payload = { ...payload, url: url.trim() }
       }

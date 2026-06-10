@@ -34,8 +34,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    // ファイルはクライアントから直接 Blob へアップロード済み。ここにはURL・メタデータ(JSON)のみ届く。
-    const { title, date, type, htmlUrl, videoUrl, url } = await request.json()
+    // 動画はBlob済み。ここにはメタデータ＋（HTMLの場合は）置換済みHTML本文(JSON)が届く。
+    const { title, date, type, htmlContent, videoUrl, url } = await request.json()
     if (!title || !date || !type) {
       return NextResponse.json({ error: 'title, date, type are required' }, { status: 400 })
     }
@@ -44,7 +44,8 @@ export async function POST(request: Request) {
     const entry: Material = { id, title: String(title), date: String(date), type, createdAt: new Date().toISOString() }
 
     if (type === 'html') {
-      entry.htmlUrl = htmlUrl || ''
+      // HTML本文は Redis に保存（/api/materials/[id] が text/html で返す）
+      await redis.set(contentKeyFor(id), htmlContent || '')
       if (videoUrl) entry.videoUrl = videoUrl
     } else {
       entry.url = url || ''
