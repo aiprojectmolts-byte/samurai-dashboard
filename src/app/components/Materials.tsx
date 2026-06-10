@@ -11,6 +11,7 @@ interface Material {
   url?: string
   htmlUrl?: string
   videoUrl?: string
+  slug?: string
   createdAt: string
 }
 
@@ -36,6 +37,7 @@ export default function Materials() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [type, setType] = useState<Material['type'] | 'minutes'>('html')
   const [url, setUrl] = useState('')
+  const [urlSlug, setUrlSlug] = useState('')
   const [htmlFile, setHtmlFile] = useState<File | null>(null)
   const [videoSource, setVideoSource] = useState<'file' | 'url'>('file')
   const [videoFile, setVideoFile] = useState<File | null>(null)
@@ -60,7 +62,7 @@ export default function Materials() {
 
   const resetForm = () => {
     setTitle(''); setDate(new Date().toISOString().slice(0, 10)); setType('html')
-    setUrl(''); setHtmlFile(null); setVideoFile(null); setVideoUrlInput(''); setVideoSource('file')
+    setUrl(''); setUrlSlug(''); setHtmlFile(null); setVideoFile(null); setVideoUrlInput(''); setVideoSource('file')
     setParticipants(''); setVttFile(null); setMinutesVideoUrl('')
     setError(''); setStage('idle'); setPct(0)
   }
@@ -77,7 +79,7 @@ export default function Materials() {
     if ((type === 'video' || type === 'link') && !url.trim()) { setError('URLを入力してください'); return }
     setBusy(true); setError(''); setPct(0)
     try {
-      let payload: any = { title: title.trim(), date, type }
+      let payload: any = { title: title.trim(), date, type, slug: urlSlug.trim() || undefined }
 
       if (type === 'html') {
         // ① 動画URL（手動入力 or ファイルアップロード）を確定
@@ -161,7 +163,7 @@ export default function Materials() {
       const res = await fetch('/api/generate-minutes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vttContent, title: title.trim(), date, participants: participants.trim(), videoUrl: minutesVideoUrl.trim() || undefined }),
+        body: JSON.stringify({ vttContent, title: title.trim(), date, participants: participants.trim(), videoUrl: minutesVideoUrl.trim() || undefined, slug: urlSlug.trim() || undefined }),
       })
       if (!res.ok) {
         const errText = await res.text().catch(() => '')
@@ -184,7 +186,9 @@ export default function Materials() {
   }
 
   const open = (m: Material) => {
-    const href = m.type === 'html' ? `/api/materials/${m.id}` : (m.url || '')
+    const href = m.type === 'html'
+      ? (m.slug ? `/gijiroku/${m.slug}` : `/api/materials/${m.id}`)
+      : (m.url || '')
     if (href) window.open(href, '_blank', 'noopener,noreferrer')
   }
 
@@ -248,6 +252,9 @@ export default function Materials() {
                   </select>
                 </label>
               </div>
+              {(type === 'html' || type === 'minutes') && (
+                <label style={lbl}>URLスラッグ（任意・空欄なら日付＋タイトルから自動生成）<input value={urlSlug} onChange={e => setUrlSlug(e.target.value)} style={inp} placeholder="例：20260610-samurai-marke-teirei" /></label>
+              )}
               {type === 'html' ? (
                 <>
                   <div>

@@ -1,5 +1,6 @@
 import { Redis } from '@upstash/redis'
 import { NextResponse } from 'next/server'
+import { buildSlug, uniqueSlug } from '@/lib/slug'
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
@@ -197,7 +198,7 @@ function buildHtml(data: any, meta: { title: string; date: string; participants:
 
 export async function POST(request: Request) {
   try {
-    const { vttContent, title, date, participants, videoUrl } = await request.json()
+    const { vttContent, title, date, participants, videoUrl, slug: manualSlug } = await request.json()
     if (!vttContent || !title || !date) {
       return NextResponse.json({ error: 'vttContent, title, date are required' }, { status: 400 })
     }
@@ -248,8 +249,9 @@ ${transcript}`
     const html = buildHtml(parsed, { title: String(title), date: String(date), participants: String(participants || ''), videoUrl })
 
     await redis.set(contentKeyFor(id), html)
-    const entry = { id, title: String(title), date: String(date), type: 'html', videoUrl: videoUrl || '', createdAt: new Date().toISOString() }
     const existing: any[] = (await redis.get(KEY) as any[]) || []
+    const slug = uniqueSlug(buildSlug(String(date), String(title), manualSlug), existing.map((m: any) => m?.slug).filter(Boolean))
+    const entry = { id, title: String(title), date: String(date), type: 'html', videoUrl: videoUrl || '', slug, createdAt: new Date().toISOString() }
     await redis.set(KEY, [entry, ...existing].slice(0, 200))
 
     return NextResponse.json({ success: true, material: entry })
