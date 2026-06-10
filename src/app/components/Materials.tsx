@@ -8,7 +8,7 @@ interface Material {
   date: string
   type: 'html' | 'video' | 'link'
   url?: string
-  contentKey?: string
+  blobUrl?: string
   createdAt: string
 }
 
@@ -19,14 +19,16 @@ export default function Materials() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [type, setType] = useState<Material['type']>('html')
   const [url, setUrl] = useState('')
-  const [htmlContent, setHtmlContent] = useState('')
-  const [fileName, setFileName] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [htmlFile, setHtmlFile] = useState<File | null>(null)
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const htmlRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLInputElement>(null)
 
   const load = async () => {
     try {
@@ -38,36 +40,55 @@ export default function Materials() {
   }
   useEffect(() => { load() }, [])
 
-  const resetForm = () => { setTitle(''); setDate(new Date().toISOString().slice(0, 10)); setType('html'); setUrl(''); setHtmlContent(''); setFileName(''); setError('') }
+  const resetForm = () => {
+    setTitle(''); setDate(new Date().toISOString().slice(0, 10)); setType('html')
+    setUrl(''); setHtmlFile(null); setVideoFile(null); setError(''); setProgress('')
+  }
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    if (!f) return
-    if (f.size > 4 * 1024 * 1024) { setError('HTMLファイルは4MBまでです'); return }
-    setFileName(f.name)
-    if (!title) setTitle(f.name.replace(/\.html?$/i, ''))
-    const reader = new FileReader()
-    reader.onload = ev => setHtmlContent(String(ev.target?.result || ''))
-    reader.readAsText(f)
+  const onHtml = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null
+    setHtmlFile(f)
+    if (f && !title) setTitle(f.name.replace(/\.html?$/i, ''))
   }
 
   const add = async () => {
     if (!title.trim() || !date) { setError('タイトルと日付を入力してください'); return }
-    if (type === 'html' && !htmlContent) { setError('HTMLファイルをアップロードしてください'); return }
+    if (type === 'html' && !htmlFile) { setError('HTMLファイルを選択してください'); return }
     if ((type === 'video' || type === 'link') && !url.trim()) { setError('URLを入力してください'); return }
     setBusy(true); setError('')
     try {
-      const res = await fetch('/api/materials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title.trim(), date, type, url: url.trim(), htmlContent }),
-      })
-      if (!res.ok) throw new Error()
+      const fd = new FormData()
+      fd.append('title', title.trim())
+      fd.append('date', date)
+      fd.append('type', type)
+
+      if (type === 'html') {
+        // ① 動画があれば先に Blob へアップロードして blobUrl を取得
+        if (videoFile) {
+          setProgress('動画をアップロード中...')
+          const vfd = new FormData()
+          vfd.append('file', videoFile)
+          const upRes = await fetch('/api/upload', { method: 'POST', body: vfd })
+          const upData = await upRes.json()
+          if (!upRes.ok || !upData.url) throw new Error('動画アップロード失敗')
+          fd.append('blobUrl', upData.url)
+        }
+        // ② HTMLファイルを送信（src置換はサーバ側で実施）
+        fd.append('htmlFile', htmlFile as File)
+      } else {
+        fd.append('url', url.trim())
+      }
+
+      setProgress('資料を保存中...')
+      const res = await fetch('/api/materials', { method: 'POST', body: fd })
+      if (!res.ok) throw new Error('保存失敗')
       resetForm()
       setShowForm(false)
       await load()
-    } catch { setError('資料の追加に失敗しました') }
-    setBusy(false)
+    } catch (e) {
+      setError('資料の追加に失敗しました：' + String(e))
+    }
+    setBusy(false); setProgress('')
   }
 
   const open = (m: Material) => {
@@ -89,7 +110,7 @@ export default function Materials() {
         <div className="pg-title">資料</div>
         <button onClick={() => { resetForm(); setShowForm(true) }} style={{ padding: '5px 14px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 11, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>+ 資料を追加</button>
       </div>
-      <div className="pg-sub">議事録・動画・参考リンクなどの資料を管理する</div>
+      <div className="pg-sub">議事録（HTML）・動画・参考リンクなどの資料を管理する</div>
 
       {loading && <div style={{ padding: '20px 0', color: 'var(--muted)', fontSize: 12 }}>読み込み中...</div>}
       {!loading && materials.length === 0 && <div style={{ padding: '20px 0', color: 'var(--muted)', fontSize: 12 }}>資料がありません。「+ 資料を追加」から登録してください。</div>}
@@ -113,7 +134,7 @@ export default function Materials() {
       </div>
 
       {showForm && (
-        <div style={overlay} onClick={() => setShowForm(false)}>
+        <div style={overlay} onClick={() => !busy && setShowForm(false)}>
           <div style={modal} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <div style={{ fontSize: 14, fontWeight: 600 }}>資料を追加</div>
@@ -133,21 +154,31 @@ export default function Materials() {
                 </label>
               </div>
               {type === 'html' ? (
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>HTMLファイル（最大4MB）</div>
-                  <div onClick={() => fileRef.current?.click()} style={{ border: '1px dashed var(--b1)', borderRadius: 'var(--r)', padding: 16, textAlign: 'center', cursor: 'pointer', background: 'var(--bg)' }}>
-                    <div style={{ fontSize: 12, fontWeight: 500 }}>{fileName ? `✓ ${fileName}` : 'クリックしてHTMLファイルを選択'}</div>
+                <>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>① HTMLファイル</div>
+                    <div onClick={() => htmlRef.current?.click()} style={dropzone}>
+                      <div style={{ fontSize: 12, fontWeight: 500 }}>{htmlFile ? `✓ ${htmlFile.name}` : 'クリックしてHTMLファイルを選択'}</div>
+                    </div>
+                    <input ref={htmlRef} type="file" accept=".html,.htm,text/html" style={{ display: 'none' }} onChange={onHtml} />
                   </div>
-                  <input ref={fileRef} type="file" accept=".html,.htm,text/html" style={{ display: 'none' }} onChange={handleFile} />
-                </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>② 動画ファイル（任意・Blobへアップロードしてsrc置換）</div>
+                    <div onClick={() => videoRef.current?.click()} style={dropzone}>
+                      <div style={{ fontSize: 12, fontWeight: 500 }}>{videoFile ? `✓ ${videoFile.name}` : 'クリックして動画ファイルを選択'}</div>
+                    </div>
+                    <input ref={videoRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={e => setVideoFile(e.target.files?.[0] || null)} />
+                  </div>
+                </>
               ) : (
                 <label style={lbl}>URL<input value={url} onChange={e => setUrl(e.target.value)} style={inp} placeholder="https://..." /></label>
               )}
+              {progress && <div style={{ fontSize: 11, color: 'var(--ink2)' }}>{progress}</div>}
               {error && <div style={{ color: 'var(--red)', fontSize: 12 }}>{error}</div>}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 18, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowForm(false)} style={{ padding: '6px 14px', background: 'none', border: '0.5px solid var(--b1)', color: 'var(--muted)', borderRadius: 'var(--r)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
-              <button onClick={add} disabled={busy} style={{ padding: '6px 16px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? 0.5 : 1 }}>{busy ? '追加中...' : '追加'}</button>
+              <button onClick={() => setShowForm(false)} disabled={busy} style={{ padding: '6px 14px', background: 'none', border: '0.5px solid var(--b1)', color: 'var(--muted)', borderRadius: 'var(--r)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
+              <button onClick={add} disabled={busy} style={{ padding: '6px 16px', background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', opacity: busy ? 0.5 : 1 }}>{busy ? '処理中...' : 'アップロード'}</button>
             </div>
           </div>
         </div>
@@ -160,3 +191,4 @@ const overlay: CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(
 const modal: CSSProperties = { background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 24, width: 460, fontFamily: 'inherit', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', maxHeight: '90vh', overflowY: 'auto' }
 const lbl: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: 'var(--muted)', fontFamily: 'inherit' }
 const inp: CSSProperties = { border: '0.5px solid var(--b1)', borderRadius: 4, padding: '7px 9px', fontSize: 12, fontFamily: 'inherit', background: 'var(--bg)', color: 'var(--ink)', outline: 'none', width: '100%', boxSizing: 'border-box' }
+const dropzone: CSSProperties = { border: '1px dashed var(--b1)', borderRadius: 'var(--r)', padding: 16, textAlign: 'center', cursor: 'pointer', background: 'var(--bg)' }
