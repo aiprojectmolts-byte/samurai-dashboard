@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
+import { upload } from '@vercel/blob/client'
 
 interface Material {
   id: string
@@ -21,30 +22,6 @@ const stageMsg: Record<UploadStage, string> = {
   'uploading-video': '動画をアップロード中...',
   'uploading-html': '議事録HTMLをアップロード中...',
   'saving': '保存中...',
-}
-
-// XMLHttpRequest で /api/upload に送信し、進捗(0-100)を onProgress に通知。完了で Blob URL を返す。
-function xhrUpload(file: File | Blob, filename: string, onProgress: (p: number) => void): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', '/api/upload')
-    xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)) }
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const data = JSON.parse(xhr.responseText)
-          if (data.url) resolve(data.url)
-          else reject(new Error(data.error || 'URLが返りませんでした'))
-        } catch { reject(new Error('レスポンス解析エラー')) }
-      } else {
-        reject(new Error(`アップロード失敗 (${xhr.status})${xhr.responseText ? '：' + xhr.responseText.slice(0, 200) : ''}`))
-      }
-    }
-    xhr.onerror = () => reject(new Error('ネットワークエラー'))
-    const fd = new FormData()
-    fd.append('file', file, filename)
-    xhr.send(fd)
-  })
 }
 
 export default function Materials() {
@@ -109,7 +86,12 @@ export default function Materials() {
           }
         } else if (videoFile) {
           setStage('uploading-video'); setPct(0)
-          videoUrl = await xhrUpload(videoFile, videoFile.name, setPct)
+          const blob = await upload(videoFile.name, videoFile, {
+            access: 'public',
+            handleUploadUrl: '/api/upload',
+            onUploadProgress: e => setPct(Math.round(e.percentage)),
+          })
+          videoUrl = blob.url
         }
         // ② HTMLを読み込み、動画を置換
         let html = await (htmlFile as File).text()
