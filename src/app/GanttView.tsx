@@ -117,17 +117,23 @@ const renderLines = (text: string) => text.split('\n').map((line, i) => <span ke
 
 export default function GanttView({ tasks: propTasks, members, onTasksChange, onEditTask }: Props) {
   const [tasks, setTasks] = useState<Task[]>(propTasks || defaultTasks)
-  const [filterStatus, setFilterStatus] = useState('all')
-  const [filterAssignee, setFilterAssignee] = useState('all')
+  // 複数選択フィルター（空集合 = すべて）。ステータスは空集合のとき完了(done)を除外
+  const [filterStatus, setFilterStatus] = useState<Set<string>>(new Set())
+  const [filterAssignee, setFilterAssignee] = useState<Set<string>>(new Set())
   const [sortBy, setSortBy] = useState('registered')
-  const [filterSrc, setFilterSrc] = useState('all')
+  const [filterSrc, setFilterSrc] = useState<Set<string>>(new Set())
 
   const allMembers = members ? [...members.samurai, ...members.molts] : []
 
+  const toggleSet = (setter: (u: (s: Set<string>) => Set<string>) => void, val: string) =>
+    setter(s => { const n = new Set(s); if (n.has(val)) n.delete(val); else n.add(val); return n })
+  const srcMatch = (t: Task, v: string) =>
+    v === 'slack' ? t.src === 'slack' : v === 'fireflies' ? (!!t.src && t.src !== 'slack') : v === 'none' ? !t.src : true
+
   const filteredTasks = [...tasks]
-    .filter(t => filterStatus === 'all' || t.st === filterStatus)
-    .filter(t => filterAssignee === 'all' || t.assignee === filterAssignee)
-    .filter(t => filterSrc === 'all' || (filterSrc === 'slack' && t.src === 'slack') || (filterSrc === 'fireflies' && t.src && t.src !== 'slack') || (filterSrc === 'none' && !t.src))
+    .filter(t => filterStatus.size === 0 ? t.st !== 'done' : filterStatus.has(t.st))
+    .filter(t => filterAssignee.size === 0 || (!!t.assignee && filterAssignee.has(t.assignee)))
+    .filter(t => filterSrc.size === 0 || [...filterSrc].some(v => srcMatch(t, v)))
     .sort((a, b) => {
       if (sortBy === 'registered') {
         const ai = tasks.indexOf(a), bi = tasks.indexOf(b)
@@ -451,7 +457,7 @@ n+2. クローズ
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>ステータス</span>
             {['all', 'doing', 'thread-review', 'review', 'waiting', 'delayed', 'todo', 'done'].map(s => (
-              <button key={s} onClick={() => setFilterStatus(s)} style={fbtn(filterStatus === s)}>
+              <button key={s} onClick={() => s === 'all' ? setFilterStatus(new Set()) : toggleSet(setFilterStatus, s)} style={fbtn(s === 'all' ? filterStatus.size === 0 : filterStatus.has(s))}>
                 {s === 'all' ? 'すべて' : s === 'doing' ? '進行中' : s === 'thread-review' ? 'スレッド確認中' : s === 'review' ? '定例確認' : s === 'waiting' ? '対応待ち' : s === 'delayed' ? '遅れあり' : s === 'todo' ? '未着手' : '完了'}
               </button>
             ))}
@@ -460,7 +466,7 @@ n+2. クローズ
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>担当者</span>
               {['all', ...allMembers].map(m => (
-                <button key={m} onClick={() => setFilterAssignee(m)} style={fbtn(filterAssignee === m)}>{m === 'all' ? '全員' : m}</button>
+                <button key={m} onClick={() => m === 'all' ? setFilterAssignee(new Set()) : toggleSet(setFilterAssignee, m)} style={fbtn(m === 'all' ? filterAssignee.size === 0 : filterAssignee.has(m))}>{m === 'all' ? '全員' : m}</button>
               ))}
             </div>
           )}
@@ -473,7 +479,7 @@ n+2. クローズ
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', minWidth: 56 }}>ソース元</span>
             {[['all', 'すべて'], ['slack', 'Slack'], ['fireflies', 'Fireflies'], ['none', 'その他']].map(([val, label]) => (
-              <button key={val} onClick={() => setFilterSrc(val)} style={fbtn(filterSrc === val)}>{label}</button>
+              <button key={val} onClick={() => val === 'all' ? setFilterSrc(new Set()) : toggleSet(setFilterSrc, val)} style={fbtn(val === 'all' ? filterSrc.size === 0 : filterSrc.has(val))}>{label}</button>
             ))}
           </div>
         </div>
