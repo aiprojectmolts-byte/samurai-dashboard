@@ -110,6 +110,10 @@ export default function ContentGen() {
   const [interviewResult, setInterviewResult] = useState<string | null>(null)
   const [interviewCopied, setInterviewCopied] = useState(false)
   const vttRef = useRef<HTMLInputElement>(null)
+  // インタビュー記事の2ステップフロー（骨子生成 → 本文生成）
+  const [interviewStep, setInterviewStep] = useState<'setup' | 'outline'>('setup')
+  const [outlineLoading, setOutlineLoading] = useState(false)
+  const [interviewOutline, setInterviewOutline] = useState<{ titles: string[]; angle: string; sections: { heading: string; summary: string }[] } | null>(null)
 
   const copyDoc = async (idx: number, doc: string) => {
     try {
@@ -433,26 +437,76 @@ ${inputText.slice(0, 3000)}`
     reader.readAsText(f)
   }
 
-  // STEP: ユーザーインタビュー記事生成（単発・spec.md準拠）
-  const runInterview = async () => {
+  // インタビュー記事：4項目の設定からプロンプト分岐を組み立てる（STEP1/STEP2で共用）
+  const buildInterviewBranches = () => {
+    const formatBranch = interviewer.trim()
+      ? `【出力形式：Q&A形式（担当者名あり）】\n質問者「${interviewer.trim()}」を各質問の冒頭に明記する。インタビュイーは「〇〇様（名前・所属）：」を毎回明記し、会話のキャッチボールが見える体裁にする。`
+      : `【出力形式：ハイブリッド形式（担当者名なし）】\n質問は「## 見出し」として処理し、質問者の名義は出さない。インタビュイーは「**〇〇様（所属）**」で明記する。リード文にSAMURAI視点のナレーションを入れる。`
+    const companyBranch = companyMode === 'with'
+      ? `【会社名あり＝事例記事】\n会社名・担当者名・具体的な数字をすべてそのまま記載。会社概要ボックスを入れる。タイトルに会社名を含める。`
+      : `【会社名なし＝コラム】\n会社名は「ある建設業の企業」「オフィス提案を手がける会社」等に置換。担当者名は「担当者」「デザイン責任者」等の役職表現に置換。会社概要ボックスは省略。学び・気づきを一般化して提示。タイトルは「〇〇を1/3に削減した方法」など汎用的な切り口に。`
+    const mediumTone = medium === 'corp'
+      ? 'コーポサイト：丁寧語・客観的・信頼感重視。「〜しています」「〜です」調。数字・固有名詞を積極的に使う。'
+      : medium === 'kato_note'
+      ? '加藤CEO note：加藤利基個人の視点・温度感。「〜だと感じました」「印象的だったのは〜」など一人称コメンタリーを挟む。読者との距離感が近い。'
+      : '会社公式X：280字以内の要約ポスト。インパクトのある数字や一言を冒頭に、記事URLへの誘導で締める。'
+    const skeleton = medium === 'company_x'
+      ? `※媒体が会社公式Xのため、記事本文ではなく「280字以内の要約ポスト」を1本だけ生成すること（冒頭にインパクトのある数字/一言、末尾は記事URLへの誘導）。骨格①〜⑪は用いない。`
+      : `【記事の骨格（この順序で固定）】\n① リード文（会社紹介＋導入効果の一言まとめ＋本記事の概要）\n② 会社概要ボックス（会社名・所在地・設立・資本金・従業員数・事業内容・URL）\n③ 導入前の課題・背景\n④ 課題の深掘り（なぜその課題が重要だったか）\n⑤ Renderyを選んだ理由\n⑥ 具体的な活用方法・業務フロー\n⑦ 導入後の効果（数字が得られていれば必ず定量値を入れる）\n⑧ 組織展開・定着の工夫（必須）\n   - 誰でも使えるようにするためにどんな仕組みを作ったか\n   - テンプレート化・マニュアル化・社内展開の工夫\n   - 文字起こしに情報がない場合は「今後の課題」として展望を記載\n⑨ 今後の展望\n⑩ 読者へのメッセージ\n⑪ まとめ段落（SAMURAI視点でこの事例の意義を締める）`
+    return { formatBranch, companyBranch, mediumTone, skeleton }
+  }
+
+  // STEP1：骨子（タイトル案・切り口・各セクション見出し＋1行サマリー）を生成
+  const runOutline = async () => {
     if (!text.trim()) { setError('文字起こし（テキスト or VTT）を入力してください'); return }
+    setOutlineLoading(true); setError(''); setInterviewResult(null)
+    try {
+      const { companyBranch, mediumTone, skeleton } = buildInterviewBranches()
+      const system = `あなたはSAMURAI ARCHITECTSの公開記事を執筆する編集者です。
+インタビュー文字起こしから、記事の「骨子」だけを設計してください（本文はまだ書きません）。
+
+${companyBranch}
+
+【媒体・トーン】
+${mediumTone}
+
+${skeleton}
+
+【出力】以下のJSONのみを返す（前後の説明文・コードブロック記号なし）：
+{
+  "titles": ["タイトル案を3つ"],
+  "angle": "この記事の切り口・狙いを1〜2文で",
+  "sections": [
+    { "heading": "セクション見出し", "summary": "そのセクションで何を書くかを1行で" }
+  ]
+}
+【ルール】
+- sections は上記の骨格の順序・段構成に従う（会社公式Xの場合は要約ポストの構成案を1〜2項目で）。
+- 文字起こしに無い事実・数字は創作しない。`
+      const out = await callClaude(system, `以下の文字起こしから骨子を設計してください。\n\n${text.slice(0, 20000)}`)
+      const outline = {
+        titles: safeBullets(out?.titles),
+        angle: safeText(out?.angle),
+        sections: safeArr(out?.sections).map((s: any) => ({ heading: safeText(s?.heading), summary: safeText(s?.summary) })).filter((s: any) => s.heading || s.summary),
+      }
+      if (outline.sections.length === 0 && outline.titles.length === 0) { setError('骨子の生成に失敗しました'); }
+      else { setInterviewOutline(outline); setInterviewStep('outline') }
+    } catch (e) {
+      console.error('[interview outline] error:', e)
+      setError('骨子の生成に失敗しました：' + String(e))
+    }
+    setOutlineLoading(false)
+  }
+
+  // STEP2：STEP1の骨子をベースに本文を生成
+  const runArticle = async () => {
+    if (!text.trim()) { setError('文字起こしを入力してください'); return }
     setInterviewLoading(true); setError(''); setInterviewResult(null)
     try {
-      const formatBranch = interviewer.trim()
-        ? `【出力形式：Q&A形式（担当者名あり）】\n質問者「${interviewer.trim()}」を各質問の冒頭に明記する。インタビュイーは「〇〇様（名前・所属）：」を毎回明記し、会話のキャッチボールが見える体裁にする。`
-        : `【出力形式：ハイブリッド形式（担当者名なし）】\n質問は「## 見出し」として処理し、質問者の名義は出さない。インタビュイーは「**〇〇様（所属）**」で明記する。リード文にSAMURAI視点のナレーションを入れる。`
-      const companyBranch = companyMode === 'with'
-        ? `【会社名あり＝事例記事】\n会社名・担当者名・具体的な数字をすべてそのまま記載。会社概要ボックスを入れる。タイトルに会社名を含める。`
-        : `【会社名なし＝コラム】\n会社名は「ある建設業の企業」「オフィス提案を手がける会社」等に置換。担当者名は「担当者」「デザイン責任者」等の役職表現に置換。会社概要ボックスは省略。学び・気づきを一般化して提示。タイトルは「〇〇を1/3に削減した方法」など汎用的な切り口に。`
-      const mediumTone = medium === 'corp'
-        ? 'コーポサイト：丁寧語・客観的・信頼感重視。「〜しています」「〜です」調。数字・固有名詞を積極的に使う。'
-        : medium === 'kato_note'
-        ? '加藤CEO note：加藤利基個人の視点・温度感。「〜だと感じました」「印象的だったのは〜」など一人称コメンタリーを挟む。読者との距離感が近い。'
-        : '会社公式X：280字以内の要約ポスト。インパクトのある数字や一言を冒頭に、記事URLへの誘導で締める。'
-      const skeleton = medium === 'company_x'
-        ? `※媒体が会社公式Xのため、記事本文ではなく「280字以内の要約ポスト」を1本だけ生成すること（冒頭にインパクトのある数字/一言、末尾は記事URLへの誘導）。骨格①〜⑪は用いない。`
-        : `【記事の骨格（この順序で固定）】\n① リード文（会社紹介＋導入効果の一言まとめ＋本記事の概要）\n② 会社概要ボックス（会社名・所在地・設立・資本金・従業員数・事業内容・URL）\n③ 導入前の課題・背景\n④ 課題の深掘り（なぜその課題が重要だったか）\n⑤ Renderyを選んだ理由\n⑥ 具体的な活用方法・業務フロー\n⑦ 導入後の効果（数字が得られていれば必ず定量値を入れる）\n⑧ 組織展開・定着の工夫（必須）\n   - 誰でも使えるようにするためにどんな仕組みを作ったか\n   - テンプレート化・マニュアル化・社内展開の工夫\n   - 文字起こしに情報がない場合は「今後の課題」として展望を記載\n⑨ 今後の展望\n⑩ 読者へのメッセージ\n⑪ まとめ段落（SAMURAI視点でこの事例の意義を締める）`
-
+      const { formatBranch, companyBranch, mediumTone, skeleton } = buildInterviewBranches()
+      const outlineBlock = interviewOutline
+        ? `【STEP1で確定した骨子（これをベースに本文を書く）】\nタイトル案：${interviewOutline.titles.join(' / ') || '（なし）'}\n切り口：${interviewOutline.angle || '（なし）'}\nセクション構成：\n${interviewOutline.sections.map((s, i) => `${i + 1}. ${s.heading} — ${s.summary}`).join('\n')}\n\nタイトルは上記の案から最も適切なものを選ぶ（または微調整可）。本文は上記セクション構成に沿って執筆する。`
+        : ''
       const system = `あなたはSAMURAI ARCHITECTSの公開記事を執筆する編集者です。
 ユーザーインタビューの文字起こしから、SAMURAIの公開記事フォーマットに準拠した記事を生成してください。
 
@@ -464,6 +518,8 @@ ${companyBranch}
 ${mediumTone}
 
 ${skeleton}
+
+${outlineBlock}
 
 【厳守ルール】
 - 文字起こしに無い事実・数字を創作しないこと。会社概要ボックスは文字起こしに情報がある項目のみ記載し、不明な項目は省略する。
@@ -1029,63 +1085,115 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
       {/* ユーザーインタビュー記事モード（単発生成） */}
       {step === 'input' && genMode === 'interview' && (
         <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 16 }}>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>① 文字起こし（テキスト貼り付け or VTT/txtファイル）</label>
-          <textarea value={text} onChange={e => setText(e.target.value)} placeholder="インタビュー録音の文字起こしを貼り付け、またはファイルを読み込み" style={{ ...inp, minHeight: 160, resize: 'vertical' as const }} />
-          <div style={{ marginTop: 6, marginBottom: 12 }}>
-            <button onClick={() => vttRef.current?.click()} style={{ fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>📄 VTT/txtを読み込む</button>
-            <input ref={vttRef} type="file" accept=".vtt,.txt" style={{ display: 'none' }} onChange={onVtt} />
+          {/* ステップインジケーター */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontSize: 11, fontWeight: 700 }}>
+            <span style={{ color: interviewStep === 'setup' ? 'var(--ink)' : 'var(--muted)' }}>STEP1 骨子生成</span>
+            <span style={{ color: 'var(--muted)' }}>→</span>
+            <span style={{ color: interviewStep === 'outline' ? 'var(--ink)' : 'var(--muted)' }}>STEP2 本文生成</span>
           </div>
 
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>② インタビュー担当者名（空欄可）</label>
-          <input value={interviewer} onChange={e => setInterviewer(e.target.value)} placeholder="例：加藤（空欄ならハイブリッド形式で出力）" style={{ ...inp, marginBottom: 12 }} />
+          {/* STEP1：設定入力 → 骨子生成 */}
+          {interviewStep === 'setup' && (
+            <>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>① 文字起こし（テキスト貼り付け or VTT/txtファイル）</label>
+              <textarea value={text} onChange={e => setText(e.target.value)} placeholder="インタビュー録音の文字起こしを貼り付け、またはファイルを読み込み" style={{ ...inp, minHeight: 160, resize: 'vertical' as const }} />
+              <div style={{ marginTop: 6, marginBottom: 12 }}>
+                <button onClick={() => vttRef.current?.click()} style={{ fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>📄 VTT/txtを読み込む</button>
+                <input ref={vttRef} type="file" accept=".vtt,.txt" style={{ display: 'none' }} onChange={onVtt} />
+              </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>③ 媒体</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
-              {([['corp', 'コーポサイト'], ['kato_note', '加藤CEO note'], ['company_x', '会社公式X']] as const).map(([val, label]) => (
-                <button key={val} onClick={() => setMedium(val)} style={{ padding: '4px 12px', borderRadius: 20, border: '0.5px solid var(--b1)', background: medium === val ? 'var(--ink)' : 'none', color: medium === val ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>{label}</button>
-              ))}
-            </div>
-          </div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>② インタビュー担当者名（空欄可）</label>
+              <input value={interviewer} onChange={e => setInterviewer(e.target.value)} placeholder="例：加藤（空欄ならハイブリッド形式で出力）" style={{ ...inp, marginBottom: 12 }} />
 
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>④ 会社名の出し方</div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {([['with', 'あり（事例記事）'], ['without', 'なし（コラム）']] as const).map(([val, label]) => (
-                <button key={val} onClick={() => setCompanyMode(val)} style={{ padding: '4px 12px', borderRadius: 20, border: '0.5px solid var(--b1)', background: companyMode === val ? 'var(--ink)' : 'none', color: companyMode === val ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>{label}</button>
-              ))}
-            </div>
-          </div>
-
-          {error && <div style={{ color: 'var(--red)', fontSize: 12, margin: '8px 0' }}>{error}</div>}
-          <button onClick={runInterview} disabled={interviewLoading} style={{ width: '100%', marginTop: 4, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: interviewLoading ? 0.6 : 1 }}>
-            {interviewLoading ? '🤖 記事を生成中...' : '🎤 インタビュー記事を生成する'}
-          </button>
-
-          {interviewResult && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>生成された記事</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={async () => { try { await navigator.clipboard.writeText(interviewResult); setInterviewCopied(true); setTimeout(() => setInterviewCopied(false), 2000) } catch {} }}
-                    style={{ fontSize: 10, padding: '3px 10px', borderRadius: 10, border: '0.5px solid ' + (interviewCopied ? 'var(--green)' : 'var(--b1)'), background: interviewCopied ? 'var(--gbg)' : 'var(--paper)', color: interviewCopied ? 'var(--green)' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit' }}>
-                    {interviewCopied ? '✓ コピーしました' : '📋 コピー'}
-                  </button>
-                  <button onClick={() => exportWord('インタビュー記事', [{ heading: '記事', body: interviewResult }])} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 10, border: '0.5px solid var(--b1)', background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📝 Word</button>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>③ 媒体</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+                  {([['corp', 'コーポサイト'], ['kato_note', '加藤CEO note'], ['company_x', '会社公式X']] as const).map(([val, label]) => (
+                    <button key={val} onClick={() => setMedium(val)} style={{ padding: '4px 12px', borderRadius: 20, border: '0.5px solid var(--b1)', background: medium === val ? 'var(--ink)' : 'none', color: medium === val ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>{label}</button>
+                  ))}
                 </div>
               </div>
-              <div style={{ background: 'var(--bg)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: '20px 24px', fontSize: 13, lineHeight: 1.8 }}>
-                <ReactMarkdown components={{
-                  h1: ({ children }) => <h1 style={{ fontSize: 18, fontWeight: 700, margin: '16px 0 10px' }}>{children}</h1>,
-                  h2: ({ children }) => <h2 style={{ fontSize: 15, fontWeight: 700, margin: '16px 0 8px', borderBottom: '1px solid var(--b1)', paddingBottom: 4 }}>{children}</h2>,
-                  h3: ({ children }) => <h3 style={{ fontSize: 13, fontWeight: 700, margin: '12px 0 6px' }}>{children}</h3>,
-                  p: ({ children }) => <p style={{ margin: '0 0 12px', lineHeight: 1.9 }}>{children}</p>,
-                  strong: ({ children }) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
-                  ul: ({ children }) => <ul style={{ paddingLeft: 20, margin: '4px 0 12px' }}>{children}</ul>,
-                  li: ({ children }) => <li style={{ marginBottom: 6, lineHeight: 1.8 }}>{children}</li>,
-                }}>{interviewResult}</ReactMarkdown>
+
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 6 }}>④ 会社名の出し方</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {([['with', 'あり（事例記事）'], ['without', 'なし（コラム）']] as const).map(([val, label]) => (
+                    <button key={val} onClick={() => setCompanyMode(val)} style={{ padding: '4px 12px', borderRadius: 20, border: '0.5px solid var(--b1)', background: companyMode === val ? 'var(--ink)' : 'none', color: companyMode === val ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>{label}</button>
+                  ))}
+                </div>
               </div>
-            </div>
+
+              {error && <div style={{ color: 'var(--red)', fontSize: 12, margin: '8px 0' }}>{error}</div>}
+              <button onClick={runOutline} disabled={outlineLoading} style={{ width: '100%', marginTop: 4, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: outlineLoading ? 0.6 : 1 }}>
+                {outlineLoading ? '🤖 骨子を生成中...' : '📝 骨子を生成する'}
+              </button>
+            </>
+          )}
+
+          {/* STEP2：骨子を確認 → 本文生成 */}
+          {interviewStep === 'outline' && interviewOutline && (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8 }}>STEP1 で生成した骨子</div>
+                {interviewOutline.titles.length > 0 && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>タイトル案</div>
+                    {interviewOutline.titles.map((t, i) => <div key={i} style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 2 }}>・{t}</div>)}
+                  </div>
+                )}
+                {interviewOutline.angle && (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>切り口</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6 }}>{interviewOutline.angle}</div>
+                  </div>
+                )}
+                {interviewOutline.sections.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 4 }}>セクション構成（見出し＋サマリー）</div>
+                    {interviewOutline.sections.map((s, i) => (
+                      <div key={i} style={{ marginBottom: 6, paddingLeft: 8, borderLeft: '2px solid var(--b1)' }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>{i + 1}. {s.heading}</div>
+                        {s.summary && <div style={{ fontSize: 11, color: 'var(--ink2)', lineHeight: 1.6 }}>{s.summary}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {error && <div style={{ color: 'var(--red)', fontSize: 12, margin: '8px 0' }}>{error}</div>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => { setInterviewStep('setup'); setError('') }} disabled={interviewLoading} style={{ padding: '10px 16px', background: 'none', color: 'var(--ink2)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>← 設定に戻る</button>
+                <button onClick={runArticle} disabled={interviewLoading} style={{ flex: 1, padding: 10, background: 'var(--ink)', color: '#fff', border: 'none', borderRadius: 'var(--r)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: interviewLoading ? 0.6 : 1 }}>
+                  {interviewLoading ? '🤖 本文を生成中...' : '🎤 この骨子で本文を生成する'}
+                </button>
+              </div>
+
+              {interviewResult && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>生成された記事</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={async () => { try { await navigator.clipboard.writeText(interviewResult); setInterviewCopied(true); setTimeout(() => setInterviewCopied(false), 2000) } catch {} }}
+                        style={{ fontSize: 10, padding: '3px 10px', borderRadius: 10, border: '0.5px solid ' + (interviewCopied ? 'var(--green)' : 'var(--b1)'), background: interviewCopied ? 'var(--gbg)' : 'var(--paper)', color: interviewCopied ? 'var(--green)' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        {interviewCopied ? '✓ コピーしました' : '📋 コピー'}
+                      </button>
+                      <button onClick={() => exportWord('インタビュー記事', [{ heading: '記事', body: interviewResult }])} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 10, border: '0.5px solid var(--b1)', background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📝 Word</button>
+                    </div>
+                  </div>
+                  <div style={{ background: 'var(--bg)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: '20px 24px', fontSize: 13, lineHeight: 1.8 }}>
+                    <ReactMarkdown components={{
+                      h1: ({ children }) => <h1 style={{ fontSize: 18, fontWeight: 700, margin: '16px 0 10px' }}>{children}</h1>,
+                      h2: ({ children }) => <h2 style={{ fontSize: 15, fontWeight: 700, margin: '16px 0 8px', borderBottom: '1px solid var(--b1)', paddingBottom: 4 }}>{children}</h2>,
+                      h3: ({ children }) => <h3 style={{ fontSize: 13, fontWeight: 700, margin: '12px 0 6px' }}>{children}</h3>,
+                      p: ({ children }) => <p style={{ margin: '0 0 12px', lineHeight: 1.9 }}>{children}</p>,
+                      strong: ({ children }) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
+                      ul: ({ children }) => <ul style={{ paddingLeft: 20, margin: '4px 0 12px' }}>{children}</ul>,
+                      li: ({ children }) => <li style={{ marginBottom: 6, lineHeight: 1.8 }}>{children}</li>,
+                    }}>{interviewResult}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
