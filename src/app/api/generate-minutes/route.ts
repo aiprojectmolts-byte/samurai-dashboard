@@ -17,30 +17,74 @@ const esc = (s: any) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 
-// VTT を「[mm:ss] 話者：発言」の読みやすい文字起こしに整形
-function parseVtt(vtt: string): string {
+type Utterance = { ts: string; sec: number; speaker: string; text: string }
+
+// VTT を {ts, sec, speaker, text} の発言配列にパース（時・分・秒を保持）
+function parseVtt(vtt: string): Utterance[] {
   const lines = String(vtt || '').replace(/\r/g, '').split('\n')
-  const out: string[] = []
-  let curTs = ''
+  const out: Utterance[] = []
+  let curTs = '0:00'
+  let curSec = 0
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
     if (!line || line === 'WEBVTT' || /^NOTE/.test(line)) continue
     const tsMatch = line.match(/(\d{1,2}:\d{2}(?::\d{2})?)(?:\.\d+)?\s*-->/)
     if (tsMatch) {
-      // 00:00:01 → mm:ss に正規化
-      const parts = tsMatch[1].split(':')
-      curTs = parts.length === 3 ? `${parts[1]}:${parts[2]}` : `${parts[0]}:${parts[1]}`
+      // HH:MM:SS / MM:SS を総秒数に変換し、mm:ss（分は60超も許容）に正規化
+      const p = tsMatch[1].split(':').map(Number)
+      curSec = p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]
+      const mm = Math.floor(curSec / 60), ss = curSec % 60
+      curTs = `${mm}:${String(ss).padStart(2, '0')}`
       continue
     }
     if (/^\d+$/.test(line)) continue // キュー番号
-    // 発言テキスト（<v Speaker>text</v> や "Speaker: text" に対応）
-    let text = line.replace(/<\/?v[^>]*>/gi, m => {
-      const sp = m.match(/<v\s+([^>]+)>/i)
-      return sp ? `${sp[1]}: ` : ''
-    }).replace(/<[^>]+>/g, '').trim()
-    if (text) out.push(`[${curTs || '00:00'}] ${text}`)
+    // 話者抽出：<v Speaker>text</v> もしくは "Speaker: text"
+    let speaker = ''
+    const vMatch = line.match(/<v\s+([^>]+)>/i)
+    if (vMatch) speaker = vMatch[1].trim()
+    let text = line.replace(/<\/?v[^>]*>/gi, '').replace(/<[^>]+>/g, '').trim()
+    if (!speaker) {
+      const sm = text.match(/^([^:：]{1,20})[:：]\s*(.+)$/)
+      if (sm) { speaker = sm[1].trim(); text = sm[2].trim() }
+    }
+    if (text) out.push({ ts: curTs, sec: curSec, speaker, text })
   }
-  return out.join('\n')
+  return out
+}
+
+// 発言配列を圧縮：短すぎる発言を除去 → 連続する同一話者をまとめる（タイムスタンプは保持）
+function compressUtterances(utts: Utterance[]): Utterance[] {
+  const filtered: Utterance[] = []
+  let prevText = ''
+  for (const u of utts) {
+    const clean = u.text.replace(/\s+/g, '')
+    if (clean.length <= 1) continue            // 1文字以下の相槌等は除去
+    if (u.text === prevText) continue          // 直前と完全重複する発言は除去
+    filtered.push(u)
+    prevText = u.text
+  }
+  const merged: Utterance[] = []
+  for (const u of filtered) {
+    const last = merged[merged.length - 1]
+    if (last && u.speaker && last.speaker === u.speaker) {
+      last.text += ' ' + u.text                // 同一話者の連続発言を結合（開始tsは保持）
+    } else {
+      merged.push({ ...u })
+    }
+  }
+  return merged
+}
+
+// 文字数上限を超える場合は、全時間帯をカバーするよう等間隔で間引く（先頭だけ残さない）
+function buildTranscript(utts: Utterance[], maxChars: number): string {
+  const fmt = (u: Utterance) => `[${u.ts}] ${u.speaker ? u.speaker + ': ' : ''}${u.text}`
+  const full = utts.map(fmt).join('\n')
+  if (full.length <= maxChars || utts.length === 0) return full
+  const step = Math.ceil(full.length / maxChars)
+  const sampled = utts.filter((_, i) => i % step === 0)
+  // 終盤を必ず含めるため最後の発言を補完
+  if (sampled[sampled.length - 1] !== utts[utts.length - 1]) sampled.push(utts[utts.length - 1])
+  return sampled.map(fmt).join('\n')
 }
 
 function videoEmbed(videoUrl?: string): string {
@@ -160,13 +204,19 @@ export async function POST(request: Request) {
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set' }, { status: 500 })
 
-    const transcript = parseVtt(vttContent)
+    const utterances = compressUtterances(parseVtt(vttContent))
+    const durationMin = utterances.length ? Math.round(utterances[utterances.length - 1].sec / 60) : 0
+    const transcript = buildTranscript(utterances, 60000)
+    const lastTs = utterances.length ? utterances[utterances.length - 1].ts : '0:00'
 
     const prompt = `以下の会議文字起こし（VTT形式）を分析して、指定のJSONフォーマットで議事録を生成してください。
-セクションは会議の流れに沿って5〜8個に分けてください。
 発言者名・タイムスタンプも活用してください。
 日本語で出力してください。
 JSONのみ返してください。
+
+文字起こしは約${durationMin}分の会議全体（最終タイムスタンプ ${lastTs}）をカバーしています。
+前半だけでなく会議全体（終盤まで）をカバーするようセクションを設計してください。
+セクションは時系列順に7〜10個作成してください。各セクションの timestamp は会議全体に分散させ、終盤のタイムスタンプも必ず含めてください。
 
 出力フォーマット：
 {
@@ -181,12 +231,12 @@ JSONのみ返してください。
 }
 
 会議文字起こし：
-${transcript.slice(0, 24000)}`
+${transcript}`
 
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 8000, messages: [{ role: 'user', content: prompt }] }),
     })
     const aiData = await aiRes.json()
     const raw = aiData.content?.[0]?.text || ''
