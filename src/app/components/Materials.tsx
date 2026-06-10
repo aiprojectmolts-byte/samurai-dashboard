@@ -252,7 +252,7 @@ export default function Materials() {
                   </select>
                 </label>
               </div>
-              {(type === 'html' || type === 'minutes') && (
+              {type === 'html' && (
                 <label style={lbl}>URLスラッグ（任意・空欄なら日付＋タイトルから自動生成）<input value={urlSlug} onChange={e => setUrlSlug(e.target.value)} style={inp} placeholder="例：20260610-samurai-marke-teirei" /></label>
               )}
               {type === 'html' ? (
@@ -297,6 +297,10 @@ export default function Materials() {
                     <input ref={vttRef} type="file" accept=".vtt,text/vtt" style={{ display: 'none' }} onChange={onVtt} />
                   </div>
                   <label style={lbl}>② 録画URL（任意・Google Drive / YouTube / 動画ファイル）<input value={minutesVideoUrl} onChange={e => setMinutesVideoUrl(e.target.value)} style={inp} placeholder="https://..." /></label>
+                  <div>
+                    <label style={lbl}>URLスラッグ（任意・空欄なら自動生成）<input value={urlSlug} onChange={e => setUrlSlug(e.target.value)} style={inp} placeholder="例：20260610-samurai-marke" /></label>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>入力すると /gijiroku/[スラッグ] でアクセスできます</div>
+                  </div>
                   <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>VTTをClaudeが解析し、サマリー・セクション・意思決定事項・ネクストアクションを含む議事録HTMLを自動生成します。</div>
                 </>
               ) : (
