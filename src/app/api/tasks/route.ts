@@ -30,10 +30,45 @@ export async function GET() {
   }
 }
 
+// クライアントが省略/null で送っても既存値を守るフィールド（空文字での消去も防ぐ）
+const PROTECTED_FIELDS = ['背景', '背景ソース', 'label', 'linkedQuestionId']
+
+function mergeTask(existing: any, incoming: any) {
+  if (!existing) return incoming // 新規タスク（既存IDなし）はそのまま追加
+  const out: any = { ...existing }
+  for (const [k, v] of Object.entries(incoming)) {
+    // クライアントが undefined / null で送ったフィールドは既存値を保持
+    if (v === undefined || v === null) continue
+    // 保護フィールドは空文字での上書き（消去）も防ぐ
+    if (PROTECTED_FIELDS.includes(k) && v === '') continue
+    out[k] = v
+  }
+  return out
+}
+
 export async function POST(request: Request) {
   try {
-    const tasks = await request.json()
-    await redis.set(TASKS_KEY, tasks)
+    const incoming = await request.json()
+    if (!Array.isArray(incoming)) {
+      // 配列でない場合は従来通りそのまま保存（後方互換）
+      await redis.set(TASKS_KEY, incoming)
+      return NextResponse.json({ success: true })
+    }
+
+    // 既存データを id でインデックス化
+    const existing = await redis.get(TASKS_KEY)
+    const existingById = new Map<string, any>()
+    if (Array.isArray(existing)) {
+      for (const t of existing) if (t && t.id) existingById.set(t.id, t)
+    }
+
+    // クライアントが送ってきた配列をベースにマージ（送られないIDは削除＝現行動作を維持）
+    const merged = incoming.map((t: any) => {
+      const prev = t && t.id ? existingById.get(t.id) : undefined
+      return mergeTask(prev, t)
+    })
+
+    await redis.set(TASKS_KEY, merged)
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save tasks' }, { status: 500 })
