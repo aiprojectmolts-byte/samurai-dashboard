@@ -73,7 +73,8 @@ export default function Materials() {
           })
           fd.append('blobUrl', blob.url)
         }
-        // ② HTMLファイルを送信（src置換はサーバ側で実施）
+        // ② HTMLファイルを送信（src置換はサーバ側で実施）。
+        //    動画(videoFile)はクライアントから直接Blobへ送るため、ここには blobUrl(文字列)のみ。
         fd.append('htmlFile', htmlFile as File)
       } else {
         fd.append('url', url.trim())
@@ -81,11 +82,16 @@ export default function Materials() {
 
       setProgress('資料を保存中...')
       const res = await fetch('/api/materials', { method: 'POST', body: fd })
-      if (!res.ok) throw new Error('保存失敗')
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        console.error('[materials] save failed:', res.status, errText)
+        throw new Error(`保存失敗 (${res.status})${errText ? '：' + errText.slice(0, 300) : ''}`)
+      }
       resetForm()
       setShowForm(false)
       await load()
     } catch (e) {
+      console.error('[materials] add error:', e)
       setError('資料の追加に失敗しました：' + String(e))
     }
     setBusy(false); setProgress('')
