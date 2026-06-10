@@ -34,6 +34,8 @@ export async function POST(request: Request): Promise<Response> {
       },
     })
     console.log('[upload] handleUpload success')
+    console.log('[upload] response keys:', Object.keys(jsonResponse))
+    console.log('[upload] response preview:', JSON.stringify(jsonResponse).slice(0, 300))
     return Response.json(jsonResponse)
   } catch (error) {
     console.error('[upload] handleUpload error:', error)
