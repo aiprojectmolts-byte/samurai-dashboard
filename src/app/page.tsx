@@ -104,7 +104,8 @@ export default function Dashboard() {
     if (isNew) {
       updated = [...tasks, task]
     } else {
-      updated = tasks.map(t => t.name === task.name ? task : t)
+      // id で照合（name は編集対象なので name 一致だと改名時にマッチせず変更が失われる）
+      updated = tasks.map(t => (t.id ?? t.name) === (task.id ?? task.name) ? task : t)
     }
     setTasks(updated)
     await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
