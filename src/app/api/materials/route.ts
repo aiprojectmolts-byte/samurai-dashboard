@@ -6,10 +6,8 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
-// multipart（HTML/動画）受信のためbodyサイズ制限・静的化を解除
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
 
 const KEY = 'samurai:materials'
 const contentKeyFor = (id: string) => `samurai:material-content:${id}`
@@ -20,7 +18,8 @@ interface Material {
   date: string
   type: 'html' | 'video' | 'link'
   url?: string
-  blobUrl?: string
+  htmlUrl?: string
+  videoUrl?: string
   createdAt: string
 }
 
@@ -35,33 +34,20 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const form = await request.formData()
-    const title = String(form.get('title') || '')
-    const date = String(form.get('date') || '')
-    const type = String(form.get('type') || '') as Material['type']
+    // ファイルはクライアントから直接 Blob へアップロード済み。ここにはURL・メタデータ(JSON)のみ届く。
+    const { title, date, type, htmlUrl, videoUrl, url } = await request.json()
     if (!title || !date || !type) {
       return NextResponse.json({ error: 'title, date, type are required' }, { status: 400 })
     }
 
     const id = Date.now().toString() + Math.random().toString(36).slice(2)
-    const entry: Material = { id, title, date, type, createdAt: new Date().toISOString() }
+    const entry: Material = { id, title: String(title), date: String(date), type, createdAt: new Date().toISOString() }
 
     if (type === 'html') {
-      const htmlFile = form.get('htmlFile') as File | null
-      if (!htmlFile) return NextResponse.json({ error: 'htmlFile required' }, { status: 400 })
-      let html = await htmlFile.text()
-      const blobUrl = String(form.get('blobUrl') || '')
-      if (blobUrl) {
-        // ../assets/xxx.mp4 等のローカル動画srcを Blob URL に置換
-        html = html.replace(
-          /((?:src|href)\s*=\s*)(["'])[^"']*\.(?:mp4|webm|mov|m4v|ogg)\2/gi,
-          `$1$2${blobUrl}$2`
-        )
-        entry.blobUrl = blobUrl
-      }
-      await redis.set(contentKeyFor(id), html)
+      entry.htmlUrl = htmlUrl || ''
+      if (videoUrl) entry.videoUrl = videoUrl
     } else {
-      entry.url = String(form.get('url') || '')
+      entry.url = url || ''
     }
 
     const existing: any[] = (await redis.get(KEY) as any[]) || []
@@ -79,7 +65,7 @@ export async function DELETE(request: Request) {
     const existing: any[] = (await redis.get(KEY) as any[]) || []
     const updated = existing.filter((m: any) => m.id !== id)
     await redis.set(KEY, updated)
-    await redis.del(contentKeyFor(id))
+    await redis.del(contentKeyFor(id)) // 旧データ（Redis保存HTML）の後始末
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 })

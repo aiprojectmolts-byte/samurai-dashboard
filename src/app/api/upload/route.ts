@@ -1,7 +1,7 @@
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { NextResponse } from 'next/server'
 
-// クライアント直アップロード用のトークン発行エンドポイント
+// クライアント直アップロード用のトークン発行エンドポイント（動画・HTML 両対応）
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
@@ -15,11 +15,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       onBeforeGenerateToken: async () => ({
         access: 'public',
         addRandomSuffix: true,
-        allowedContentTypes: ['video/*'],
-        maximumSizeInBytes: 1024 * 1024 * 1024, // 1GB
+        maximumSizeInBytes: 1024 * 1024 * 1024, // 1GB（動画・HTML共通）
       }),
       onUploadCompleted: async () => {
-        // アップロード完了時のフック（現状は処理なし）
+        // 完了フック（現状処理なし）。Vercel本番では公開URLにコールバックされる
       },
     })
     return NextResponse.json(jsonResponse)

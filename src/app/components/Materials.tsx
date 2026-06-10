@@ -9,7 +9,8 @@ interface Material {
   date: string
   type: 'html' | 'video' | 'link'
   url?: string
-  blobUrl?: string
+  htmlUrl?: string
+  videoUrl?: string
   createdAt: string
 }
 
@@ -58,30 +59,39 @@ export default function Materials() {
     if ((type === 'video' || type === 'link') && !url.trim()) { setError('URLを入力してください'); return }
     setBusy(true); setError('')
     try {
-      const fd = new FormData()
-      fd.append('title', title.trim())
-      fd.append('date', date)
-      fd.append('type', type)
+      let payload: any = { title: title.trim(), date, type }
 
       if (type === 'html') {
-        // ① 動画があればブラウザから直接 Vercel Blob へアップロードして blobUrl を取得
+        // ① 動画があればブラウザから直接 Vercel Blob へアップロード
+        let videoUrl = ''
         if (videoFile) {
           setProgress('動画をアップロード中...')
-          const blob = await upload(videoFile.name, videoFile, {
-            access: 'public',
-            handleUploadUrl: '/api/upload',
-          })
-          fd.append('blobUrl', blob.url)
+          const v = await upload(videoFile.name, videoFile, { access: 'public', handleUploadUrl: '/api/upload' })
+          videoUrl = v.url
         }
-        // ② HTMLファイルを送信（src置換はサーバ側で実施）。
-        //    動画(videoFile)はクライアントから直接Blobへ送るため、ここには blobUrl(文字列)のみ。
-        fd.append('htmlFile', htmlFile as File)
+        // ② HTMLを読み込み、動画srcを videoUrl に置換
+        setProgress('HTMLを処理中...')
+        let html = await (htmlFile as File).text()
+        if (videoUrl) {
+          html = html.replace(/((?:src|href)\s*=\s*)(["'])[^"']*\.(?:mp4|webm|mov|m4v|ogg)\2/gi, `$1$2${videoUrl}$2`)
+        }
+        // ③ 置換済みHTMLをブラウザから直接 Blob へアップロード
+        setProgress('HTMLをアップロード中...')
+        const cid = Date.now().toString() + Math.random().toString(36).slice(2)
+        const htmlBlob = new Blob([html], { type: 'text/html' })
+        const h = await upload(`${cid}.html`, htmlBlob, { access: 'public', handleUploadUrl: '/api/upload', contentType: 'text/html' })
+        // ④ /api/materials にはURL・メタデータのみ（JSON）
+        payload = { ...payload, htmlUrl: h.url, videoUrl }
       } else {
-        fd.append('url', url.trim())
+        payload = { ...payload, url: url.trim() }
       }
 
       setProgress('資料を保存中...')
-      const res = await fetch('/api/materials', { method: 'POST', body: fd })
+      const res = await fetch('/api/materials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
       if (!res.ok) {
         const errText = await res.text().catch(() => '')
         console.error('[materials] save failed:', res.status, errText)
