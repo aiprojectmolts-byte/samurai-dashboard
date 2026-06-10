@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
+import { upload } from '@vercel/blob/client'
 
 interface Material {
   id: string
@@ -63,15 +64,14 @@ export default function Materials() {
       fd.append('type', type)
 
       if (type === 'html') {
-        // ① 動画があれば先に Blob へアップロードして blobUrl を取得
+        // ① 動画があればブラウザから直接 Vercel Blob へアップロードして blobUrl を取得
         if (videoFile) {
           setProgress('動画をアップロード中...')
-          const vfd = new FormData()
-          vfd.append('file', videoFile)
-          const upRes = await fetch('/api/upload', { method: 'POST', body: vfd })
-          const upData = await upRes.json()
-          if (!upRes.ok || !upData.url) throw new Error('動画アップロード失敗')
-          fd.append('blobUrl', upData.url)
+          const blob = await upload(videoFile.name, videoFile, {
+            access: 'public',
+            handleUploadUrl: '/api/upload',
+          })
+          fd.append('blobUrl', blob.url)
         }
         // ② HTMLファイルを送信（src置換はサーバ側で実施）
         fd.append('htmlFile', htmlFile as File)

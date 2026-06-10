@@ -1,24 +1,29 @@
-import { put } from '@vercel/blob'
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { NextResponse } from 'next/server'
 
-// 大きな動画ファイルを受け取れるよう、デフォルトのbodyサイズ制限・静的化を解除する
+// クライアント直アップロード用のトークン発行エンドポイント
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const form = await request.formData()
-    const file = form.get('file') as File | null
-    if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 })
-
-    const blob = await put(file.name || `upload-${Date.now()}`, file, {
-      access: 'public',
-      addRandomSuffix: true,
+    const body = (await request.json()) as HandleUploadBody
+    const jsonResponse = await handleUpload({
+      request,
+      body,
       token: process.env.BLOB_READ_WRITE_TOKEN,
+      onBeforeGenerateToken: async () => ({
+        access: 'public',
+        addRandomSuffix: true,
+        allowedContentTypes: ['video/*'],
+        maximumSizeInBytes: 1024 * 1024 * 1024, // 1GB
+      }),
+      onUploadCompleted: async () => {
+        // アップロード完了時のフック（現状は処理なし）
+      },
     })
-    return NextResponse.json({ url: blob.url })
+    return NextResponse.json(jsonResponse)
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 })
+    return NextResponse.json({ error: String(error) }, { status: 400 })
   }
 }
