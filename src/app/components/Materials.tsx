@@ -96,18 +96,22 @@ export default function Materials() {
         // ② HTMLを読み込み、動画を置換
         let html = await (htmlFile as File).text()
         if (driveFileId) {
-          // Google Drive：<video> 要素を iframe（preview）に置き換える
-          const iframe = `<iframe src="https://drive.google.com/file/d/${driveFileId}/preview" width="100%" height="480" allow="autoplay"></iframe>`
-          // ① <video>...</video> 全体を完全に削除してから iframe を挿入（残らないようにする）
-          if (/<video[\s\S]*?<\/video>/i.test(html)) {
-            html = html.replace(/<video[\s\S]*?<\/video>/gi, iframe)
-          } else if (/<video\b[^>]*>/i.test(html)) {
-            // 閉じタグなし／自己閉じの場合
-            html = html.replace(/<video\b[^>]*\/?>/i, iframe)
+          const iframe = `<iframe src="https://drive.google.com/file/d/${driveFileId}/preview" width="100%" height="480" allow="autoplay" style="border:0"></iframe>`
+          // ① rec-embed ラッパーごと iframe に置換（黒い動画プレーヤーごと差し替える）
+          html = html.replace(
+            /<div[^>]*class=["'][^"']*rec-embed[^"']*["'][^>]*>[\s\S]*?<\/div>/,
+            iframe
+          )
+          // rec-embed が無かった場合は <video> を iframe に置換（フォールバック）
+          if (!html.includes(iframe)) {
+            if (/<video[\s\S]*?<\/video>/i.test(html)) html = html.replace(/<video[\s\S]*?<\/video>/i, iframe)
+            else if (/<video\b[^>]*>/i.test(html)) html = html.replace(/<video\b[^>]*\/?>/i, iframe)
           }
-          // 念のため、残った <source>・</video> を除去
+          // ② それでも残った <video>・<source> タグを削除
+          html = html.replace(/<video[\s\S]*?<\/video>/gi, '')
+          html = html.replace(/<video[^>]*\/?>/gi, '')
           html = html.replace(/<source\b[^>]*\/?>/gi, '').replace(/<\/video>/gi, '')
-          // ② rec-status 要素を非表示（削除）
+          // ③ rec-status 要素を非表示（削除）
           html = html.replace(/<p[^>]*id=["']rec-status["'][^>]*>[\s\S]*?<\/p>/, '')
           // Drive iframe では再生位置ジャンプができないため、タイムスタンプリンクを無効化
           html = html.replace(/onclick\s*=\s*(["'])[^"']*?(?:currentTime|seekTo|jumpTo|seek)[^"']*\1/gi, 'onclick="return false;"')
