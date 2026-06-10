@@ -1,6 +1,11 @@
 import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
 
+// 大きな動画ファイルを受け取れるよう、デフォルトのbodyサイズ制限・静的化を解除する
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
 export async function POST(request: Request) {
   try {
     const form = await request.formData()

@@ -6,6 +6,11 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
 })
 
+// multipart（HTML/動画）受信のためbodyサイズ制限・静的化を解除
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
 const KEY = 'samurai:materials'
 const contentKeyFor = (id: string) => `samurai:material-content:${id}`
 
