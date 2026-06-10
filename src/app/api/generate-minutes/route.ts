@@ -136,7 +136,11 @@ function buildHtml(data: any, meta: { title: string; date: string; participants:
     : ''
 
   const actionsHtml = nextActions.length
-    ? `<section id="actions"><h2>ネクストアクション</h2><table class="action-table"><thead><tr><th>タスク</th><th>担当者</th><th>期日</th></tr></thead><tbody>${nextActions.map((a: any) => `<tr><td>${esc(a.task)}</td><td>${esc(a.owner)}</td><td>${esc(a.due)}</td></tr>`).join('')}</tbody></table></section>`
+    ? `<section id="actions"><h2>ネクストアクション</h2><table class="action-table"><thead><tr><th>タスク</th><th>担当者</th><th>期日</th></tr></thead><tbody>${nextActions.map((a: any) => {
+        const due = String(a.due ?? '')
+        const unknown = due.trim() === '未確認'
+        return `<tr${unknown ? ' class="due-unknown"' : ''}><td>${esc(a.task)}</td><td>${esc(a.owner)}</td><td${unknown ? ' class="due-cell-unknown"' : ''}>${esc(due)}</td></tr>`
+      }).join('')}</tbody></table></section>`
     : ''
 
   return `<!DOCTYPE html>
@@ -174,6 +178,8 @@ function buildHtml(data: any, meta: { title: string; date: string; participants:
     .action-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .action-table th { text-align: left; padding: 8px 12px; color: var(--text2); border-bottom: 1px solid var(--border); font-weight: 500; }
     .action-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .action-table tr.due-unknown td { background: #fff7ed; }
+    .action-table td.due-cell-unknown { color: #ea580c; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -218,6 +224,12 @@ JSONのみ返してください。
 文字起こしは約${durationMin}分の会議全体（最終タイムスタンプ ${lastTs}）をカバーしています。
 前半だけでなく会議全体（終盤まで）をカバーするようセクションを設計してください。
 セクションは時系列順に7〜10個作成してください。各セクションの timestamp は会議全体に分散させ、終盤のタイムスタンプも必ず含めてください。
+
+nextActions の due フィールドについて：
+・VTTの文字起こしに明示的に記載されている日付・期日のみを記入すること
+・「今週の金曜日」「2週間以内」など相対的な表現はそのまま記載すること
+・VTTに期日の記載がない場合は必ず「未確認」と記入すること
+・絶対に日付を推測・補完しないこと
 
 出力フォーマット：
 {
