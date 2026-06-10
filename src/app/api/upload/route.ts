@@ -1,28 +1,23 @@
-import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
+import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
 
-// クライアント直アップロード用のトークン発行エンドポイント（動画・HTML 両対応）
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
-export async function POST(request: Request): Promise<NextResponse> {
+export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as HandleUploadBody
-    const jsonResponse = await handleUpload({
-      request,
-      body,
+    const form = await request.formData()
+    const file = form.get('file') as File | null
+    if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 })
+
+    const blob = await put(file.name || `upload-${Date.now()}`, file, {
+      access: 'public',
+      addRandomSuffix: true,
       token: process.env.BLOB_READ_WRITE_TOKEN,
-      onBeforeGenerateToken: async () => ({
-        access: 'public',
-        addRandomSuffix: true,
-        maximumSizeInBytes: 1024 * 1024 * 1024, // 1GB（動画・HTML共通）
-      }),
-      onUploadCompleted: async () => {
-        // 完了フック（現状処理なし）。Vercel本番では公開URLにコールバックされる
-      },
     })
-    return NextResponse.json(jsonResponse)
+    return NextResponse.json({ url: blob.url })
   } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 400 })
+    return NextResponse.json({ error: String(error) }, { status: 500 })
   }
 }

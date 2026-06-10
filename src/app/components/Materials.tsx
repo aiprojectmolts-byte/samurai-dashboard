@@ -1,7 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
-import { upload } from '@vercel/blob/client'
 
 interface Material {
   id: string
@@ -14,21 +13,56 @@ interface Material {
   createdAt: string
 }
 
+type UploadStage = 'idle' | 'uploading-video' | 'uploading-html' | 'saving' | 'done'
+
 const typeLabel: Record<Material['type'], string> = { html: '📄 HTML', video: '🎬 動画', link: '🔗 リンク' }
+const stageMsg: Record<UploadStage, string> = {
+  idle: '', done: '',
+  'uploading-video': '動画をアップロード中...',
+  'uploading-html': '議事録HTMLをアップロード中...',
+  'saving': '保存中...',
+}
+
+// XMLHttpRequest で /api/upload に送信し、進捗(0-100)を onProgress に通知。完了で Blob URL を返す。
+function xhrUpload(file: File | Blob, filename: string, onProgress: (p: number) => void): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/upload')
+    xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)) }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          if (data.url) resolve(data.url)
+          else reject(new Error(data.error || 'URLが返りませんでした'))
+        } catch { reject(new Error('レスポンス解析エラー')) }
+      } else {
+        reject(new Error(`アップロード失敗 (${xhr.status})${xhr.responseText ? '：' + xhr.responseText.slice(0, 200) : ''}`))
+      }
+    }
+    xhr.onerror = () => reject(new Error('ネットワークエラー'))
+    const fd = new FormData()
+    fd.append('file', file, filename)
+    xhr.send(fd)
+  })
+}
 
 export default function Materials() {
   const [materials, setMaterials] = useState<Material[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [progress, setProgress] = useState('')
+  const [stage, setStage] = useState<UploadStage>('idle')
+  const [pct, setPct] = useState(0)
   const [error, setError] = useState('')
   const [title, setTitle] = useState('')
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [type, setType] = useState<Material['type']>('html')
   const [url, setUrl] = useState('')
   const [htmlFile, setHtmlFile] = useState<File | null>(null)
+  const [videoSource, setVideoSource] = useState<'file' | 'url'>('file')
   const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [videoUrlInput, setVideoUrlInput] = useState('')
   const htmlRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLInputElement>(null)
 
@@ -44,7 +78,8 @@ export default function Materials() {
 
   const resetForm = () => {
     setTitle(''); setDate(new Date().toISOString().slice(0, 10)); setType('html')
-    setUrl(''); setHtmlFile(null); setVideoFile(null); setError(''); setProgress('')
+    setUrl(''); setHtmlFile(null); setVideoFile(null); setVideoUrlInput(''); setVideoSource('file')
+    setError(''); setStage('idle'); setPct(0)
   }
 
   const onHtml = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,36 +92,36 @@ export default function Materials() {
     if (!title.trim() || !date) { setError('タイトルと日付を入力してください'); return }
     if (type === 'html' && !htmlFile) { setError('HTMLファイルを選択してください'); return }
     if ((type === 'video' || type === 'link') && !url.trim()) { setError('URLを入力してください'); return }
-    setBusy(true); setError('')
+    setBusy(true); setError(''); setPct(0)
     try {
       let payload: any = { title: title.trim(), date, type }
 
       if (type === 'html') {
-        // ① 動画があればブラウザから直接 Vercel Blob へアップロード
+        // ① 動画URL（手動入力 or ファイルアップロード）を確定
         let videoUrl = ''
-        if (videoFile) {
-          setProgress('動画をアップロード中...')
-          const v = await upload(videoFile.name, videoFile, { access: 'public', handleUploadUrl: '/api/upload' })
-          videoUrl = v.url
+        if (videoSource === 'url') {
+          videoUrl = videoUrlInput.trim()
+        } else if (videoFile) {
+          setStage('uploading-video'); setPct(0)
+          videoUrl = await xhrUpload(videoFile, videoFile.name, setPct)
         }
         // ② HTMLを読み込み、動画srcを videoUrl に置換
-        setProgress('HTMLを処理中...')
         let html = await (htmlFile as File).text()
         if (videoUrl) {
           html = html.replace(/((?:src|href)\s*=\s*)(["'])[^"']*\.(?:mp4|webm|mov|m4v|ogg)\2/gi, `$1$2${videoUrl}$2`)
         }
-        // ③ 置換済みHTMLをブラウザから直接 Blob へアップロード
-        setProgress('HTMLをアップロード中...')
+        // ③ 置換済みHTMLを Blob へアップロード
+        setStage('uploading-html'); setPct(0)
         const cid = Date.now().toString() + Math.random().toString(36).slice(2)
         const htmlBlob = new Blob([html], { type: 'text/html' })
-        const h = await upload(`${cid}.html`, htmlBlob, { access: 'public', handleUploadUrl: '/api/upload', contentType: 'text/html' })
-        // ④ /api/materials にはURL・メタデータのみ（JSON）
-        payload = { ...payload, htmlUrl: h.url, videoUrl }
+        const htmlUrl = await xhrUpload(htmlBlob, `${cid}.html`, setPct)
+        // ④ /api/materials にURL・メタデータのみ（JSON）
+        payload = { ...payload, htmlUrl, videoUrl }
       } else {
         payload = { ...payload, url: url.trim() }
       }
 
-      setProgress('資料を保存中...')
+      setStage('saving')
       const res = await fetch('/api/materials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,7 +139,7 @@ export default function Materials() {
       console.error('[materials] add error:', e)
       setError('資料の追加に失敗しました：' + String(e))
     }
-    setBusy(false); setProgress('')
+    setBusy(false); setStage('idle'); setPct(0)
   }
 
   const open = (m: Material) => {
@@ -119,6 +154,8 @@ export default function Materials() {
       await load()
     } catch {}
   }
+
+  const showBar = stage === 'uploading-video' || stage === 'uploading-html'
 
   return (
     <div>
@@ -179,18 +216,42 @@ export default function Materials() {
                     <input ref={htmlRef} type="file" accept=".html,.htm,text/html" style={{ display: 'none' }} onChange={onHtml} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>② 動画ファイル（任意・Blobへアップロードしてsrc置換）</div>
-                    <div onClick={() => videoRef.current?.click()} style={dropzone}>
-                      <div style={{ fontSize: 12, fontWeight: 500 }}>{videoFile ? `✓ ${videoFile.name}` : 'クリックして動画ファイルを選択'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>② 動画（任意・HTML内の動画srcを置換）</div>
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                      {([['file', '動画ファイルを選択'], ['url', '動画URLを入力']] as const).map(([val, label]) => (
+                        <button key={val} onClick={() => setVideoSource(val)}
+                          style={{ padding: '4px 12px', borderRadius: 20, border: '0.5px solid var(--b1)', background: videoSource === val ? 'var(--ink)' : 'none', color: videoSource === val ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>
+                          {label}
+                        </button>
+                      ))}
                     </div>
-                    <input ref={videoRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={e => setVideoFile(e.target.files?.[0] || null)} />
+                    {videoSource === 'file' ? (
+                      <>
+                        <div onClick={() => videoRef.current?.click()} style={dropzone}>
+                          <div style={{ fontSize: 12, fontWeight: 500 }}>{videoFile ? `✓ ${videoFile.name}` : 'クリックして動画ファイルを選択'}</div>
+                        </div>
+                        <input ref={videoRef} type="file" accept="video/*" style={{ display: 'none' }} onChange={e => setVideoFile(e.target.files?.[0] || null)} />
+                      </>
+                    ) : (
+                      <input value={videoUrlInput} onChange={e => setVideoUrlInput(e.target.value)} style={inp} placeholder="YouTube・Google Drive等の共有リンク" />
+                    )}
                   </div>
                 </>
               ) : (
                 <label style={lbl}>URL<input value={url} onChange={e => setUrl(e.target.value)} style={inp} placeholder="https://..." /></label>
               )}
-              {progress && <div style={{ fontSize: 11, color: 'var(--ink2)' }}>{progress}</div>}
-              {error && <div style={{ color: 'var(--red)', fontSize: 12 }}>{error}</div>}
+
+              {(stage !== 'idle' || error) && (
+                <div>
+                  {stage !== 'idle' && <div style={{ fontSize: 11, color: 'var(--ink2)', marginBottom: 4 }}>{stageMsg[stage]}{showBar ? ` ${pct}%` : ''}</div>}
+                  {showBar && (
+                    <div style={{ background: 'var(--b1)', borderRadius: 3, height: 6, overflow: 'hidden' }}>
+                      <div style={{ width: pct + '%', height: '100%', background: 'var(--green)', borderRadius: 3, transition: 'width 0.2s' }} />
+                    </div>
+                  )}
+                  {error && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 6 }}>{error}</div>}
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 18, justifyContent: 'flex-end' }}>
               <button onClick={() => setShowForm(false)} disabled={busy} style={{ padding: '6px 14px', background: 'none', border: '0.5px solid var(--b1)', color: 'var(--muted)', borderRadius: 'var(--r)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>キャンセル</button>
