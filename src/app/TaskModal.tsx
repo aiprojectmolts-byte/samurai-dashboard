@@ -8,7 +8,7 @@ interface Task {
   id?: string
   施策: string; name: string; s: string; e: string
   own: 'molts' | 'samurai' | 'both'; st: TaskStatus; chg: boolean
-  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string; threadUrl?: string
+  assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string; threadUrl?: string; linkedQuestionId?: string
 }
 
 interface Members { samurai: string[]; molts: string[] }

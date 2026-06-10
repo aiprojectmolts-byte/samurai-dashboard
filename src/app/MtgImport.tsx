@@ -2,7 +2,7 @@
 import { useState, useRef } from 'react'
 
 type TaskStatus = 'todo' | 'doing' | 'review' | 'done' | 'waiting' | 'delayed'
-interface Task { id?: string; 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string; threadUrl?: string }
+interface Task { id?: string; 施策: string; name: string; s: string; e: string; own: 'molts'|'samurai'|'both'; st: TaskStatus; chg: boolean; assignee?: string; blocker?: boolean; impact?: string; src?: string; 備考?: string; 背景?: string; 背景ソース?: string; phase?: string; threadUrl?: string; linkedQuestionId?: string }
 interface Question { id: string; text: string; assignee: string; status: 'unanswered'|'answered'; priority: 'high'|'normal'; linkedTask: string; src: string; createdAt?: string }
 interface Extracted { summary: string; tasks: Task[]; questions: Question[]; knowledge?: any[] }
 interface ReviewDisplay { name: string; oldLabel: string; newLabel: string; outcome: '承認'|'FB'|'言及なし'; fbContent?: string }
