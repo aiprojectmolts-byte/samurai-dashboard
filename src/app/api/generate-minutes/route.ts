@@ -102,9 +102,9 @@ function buildHtml(data: any, meta: { title: string; date: string; participants:
   <title>${esc(meta.title)}</title>
   <style>
     :root {
-      --bg: #1a1a18; --bg2: #242422; --border: #333330;
-      --text: #e8e8e4; --text2: #a0a09a; --accent: #e8e8e4;
-      --green: #4ade80; --orange: #fb923c;
+      --bg: #ffffff; --bg2: #f7f7f5; --border: #e5e5e0;
+      --text: #1a1a18; --text2: #666660; --accent: #1a1a18;
+      --green: #16a34a; --orange: #ea580c;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
