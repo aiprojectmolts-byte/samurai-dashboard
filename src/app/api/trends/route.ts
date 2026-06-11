@@ -1,12 +1,24 @@
 import { NextResponse } from 'next/server'
 
+// SAMURAIの自社プロダクト（Rendery / knock knock 3D / knock knock AI / VISIOAL / 受託）の
+// 直接・価値競合とその周辺トレンドを定点観測するためのキーワード群。
 const KEYWORDS = [
+  // 競合・価値競合（CG/建築パース/3Dビジュアライゼーション）
+  '建築 パース AI',
+  '3D パース 建築',
+  '建築 ビジュアライゼーション',
+  'レンダリング 建築 AI',
+  '内装 デザイン AI',
+  // 業界トレンド・DX
   '建築 AI',
   '建設 DX',
-  '建築 デジタル',
-  '工務店 AI',
-  '設計 自動化',
+  '施工管理 AI',
   'BIM AI',
+  'リフォーム DX',
+  '不動産 テック',
+  // 設計・受託・プロップテック
+  '設計 自動化',
+  'プロップテック',
 ]
 
 async function fetchNewsForKeyword(keyword: string) {
