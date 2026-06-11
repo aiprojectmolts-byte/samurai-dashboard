@@ -52,7 +52,7 @@ interface SourceItem {
 }
 
 type FormState = Omit<Insight, 'id' | 'createdAt' | 'reactions'>
-type Tab = 'feed' | 'sources' | 'agenda' | 'delivery' | 'skill'
+type Tab = 'brief' | 'feed' | 'sources' | 'agenda' | 'delivery' | 'skill'
 
 // リサーチャーの初期ブリーフ（判断の土台）。手入力不要で機能するよう既定値を投入。
 // 既知の事実（4プロダクト・建築/建設・正直訴求の哲学）のみを記し、未確定の詳細は明示的な追記欄にする。
@@ -106,7 +106,7 @@ const extractJson = (raw: string, arr = false): any => {
 }
 
 export default function Researcher() {
-  const [tab, setTab] = useState<Tab>('feed')
+  const [tab, setTab] = useState<Tab>('brief')
   const [items, setItems] = useState<Insight[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -145,6 +145,14 @@ export default function Researcher() {
   const [digestLoading, setDigestLoading] = useState(false)
   const [digestCopied, setDigestCopied] = useState(false)
 
+  // ブリーフィング（30秒キャッチアップ＋読む面）
+  const [briefSummary, setBriefSummary] = useState('')
+  const [briefMeta, setBriefMeta] = useState<{ generatedAt?: string; count?: number }>({})
+  const [briefGenLoading, setBriefGenLoading] = useState(false)
+  const [briefShowDrafts, setBriefShowDrafts] = useState(true)
+  const [lastVisit, setLastVisit] = useState('')
+  const [briefExpanded, setBriefExpanded] = useState<string | null>(null)
+
   // スキル：ブリーフ（判断の土台）と自己学習
   const [brief, setBrief] = useState('')          // 保存済み（AI注入に使用）
   const [briefDraft, setBriefDraft] = useState('') // 編集中バッファ
@@ -181,7 +189,21 @@ export default function Researcher() {
       setBrief(b); setBriefDraft(b); setBriefUpdatedAt(data?.updatedAt || '')
     } catch { setBrief(DEFAULT_BRIEF); setBriefDraft(DEFAULT_BRIEF) }
   }
-  useEffect(() => { load(); loadAgenda(); loadBrief() }, [])
+  const loadBriefing = async () => {
+    try {
+      const res = await fetch('/api/briefing')
+      const data = await res.json()
+      if (data?.summary) { setBriefSummary(data.summary); setBriefMeta({ generatedAt: data.generatedAt, count: data.count }) }
+    } catch {}
+  }
+  useEffect(() => {
+    load(); loadAgenda(); loadBrief(); loadBriefing()
+    try {
+      const lv = localStorage.getItem('researcher_last_visit') || ''
+      setLastVisit(lv)
+      localStorage.setItem('researcher_last_visit', new Date().toISOString())
+    } catch {}
+  }, [])
 
   const toggleSet = (setter: (u: (s: Set<string>) => Set<string>) => void, val: string) =>
     setter(s => { const n = new Set(s); if (n.has(val)) n.delete(val); else n.add(val); return n })
@@ -532,6 +554,34 @@ Markdown形式。冒頭に1〜2文の前書き、各トピックは「見出し�
     try { await navigator.clipboard.writeText(digest); setDigestCopied(true); setTimeout(() => setDigestCopied(false), 2000) } catch {}
   }
 
+  // 30秒キャッチアップ要約を生成（最新インサイトを「何が起きた→自社にどう効く」に圧縮）
+  const generateBriefing = async () => {
+    setBriefGenLoading(true); setError('')
+    try {
+      const pub = items.filter(i => i.status === 'published')
+      const pool = pub.length ? pub : items
+      const recent = [...pool].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 12)
+      if (!recent.length) { setError('対象インサイトがありません'); setBriefGenLoading(false); return }
+      const body = recent.map((i, n) => `${n + 1}. [${i.category}${(i.products || []).length ? '/' + i.products.join('・') : ''}] ${i.title}\n要点:${i.summary}\n自社との関わり:${i.relevance}`).join('\n\n')
+      const system = briefBlock() + `あなたはSAMURAI ARCHITECTSのリサーチャーです。以下のインサイト群から、従業員が30秒で今をキャッチアップできる「エグゼクティブ・サマリー」を作成してください。
+・3〜5個の箇条書き。各行は「何が起きたか → 自社（${OUR_PRODUCTS.join('/')}）にとっての意味」を一文で。
+・競合の動き・自社プロダクトへの影響を最優先。最後に「👀 今週の注目点」を1行。
+・親しみやすく簡潔に。情報源に無い事実・数字は創作しない。Markdownの箇条書きのみを返す（前置き不要）。`
+      const res = await fetch('/api/claude', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1200, system, messages: [{ role: 'user', content: body }] }),
+      })
+      const data = await res.json()
+      const raw = data.content?.find((c: any) => c.type === 'text')?.text || ''
+      if (!raw.trim()) throw new Error('空の応答')
+      setBriefSummary(raw.trim()); setBriefMeta({ generatedAt: new Date().toISOString(), count: recent.length })
+      await fetch('/api/briefing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ summary: raw.trim(), count: recent.length }) })
+    } catch (e) {
+      setError('キャッチアップ要約の生成に失敗：' + String(e))
+    }
+    setBriefGenLoading(false)
+  }
+
   // ===== スキル：ブリーフ保存・自己学習・セルフレビュー =====
   const saveBrief = async () => {
     setBriefSaving(true); setBriefMsg('')
@@ -630,12 +680,19 @@ ${lows || '（データなし）'}`
     .filter(i => { if (!search.trim()) return true; const q = search.toLowerCase(); return (i.title + i.summary + i.relevance + i.soWhat + (i.points || []).join(' ') + (i.actions || []).join(' ')).toLowerCase().includes(q) })
     .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
 
-  const TABS: [Tab, string][] = [['feed', '📋 インサイト'], ['sources', '🔌 ソース＆草案'], ['agenda', '🎯 リサーチアジェンダ'], ['delivery', '📊 配信＆学習'], ['skill', '🧠 スキル&ブリーフ']]
+  const TABS: [Tab, string][] = [['brief', '📰 ブリーフィング'], ['feed', '📋 全インサイト'], ['sources', '🔌 ソース＆草案'], ['agenda', '🎯 リサーチアジェンダ'], ['delivery', '📊 配信＆学習'], ['skill', '🧠 スキル&ブリーフ']]
+
+  // ブリーフィングの読むリスト（新しい順、下書きの扱いはトグル）
+  const briefingList = items
+    .filter(i => briefShowDrafts || i.status === 'published')
+    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+  const newSinceVisit = lastVisit ? briefingList.filter(i => (i.createdAt || '') > lastVisit).length : 0
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
         <div className="pg-title">🔭 リサーチャー</div>
+        {tab === 'brief' && <div style={{ display: 'flex', gap: 8 }}><button onClick={runAutoCollect} disabled={autoRunning} style={{ ...btnGhost, opacity: autoRunning ? 0.6 : 1 }}>{autoRunning ? '収集中...' : '🤖 新着を収集'}</button><button onClick={openNew} style={btnPrimary}>+ インサイトを作成</button></div>}
         {tab === 'feed' && <button onClick={openNew} style={btnPrimary}>+ インサイトを作成</button>}
         {tab === 'agenda' && <div style={{ display: 'flex', gap: 8 }}><button onClick={addManualAgenda} style={btnGhost}>+ テーマ追加</button><button onClick={proposeAgenda} disabled={agendaProposing} style={{ ...btnPrimary, opacity: agendaProposing ? 0.6 : 1 }}>{agendaProposing ? '🧠 提案中...' : '🧠 次のテーマをAI提案'}</button></div>}
         {tab === 'sources' && <button onClick={loadSources} disabled={srcLoading} style={{ ...btnPrimary, opacity: srcLoading ? 0.6 : 1 }}>{srcLoading ? '取得中...' : '🔄 ソースを再取得'}</button>}
@@ -662,6 +719,103 @@ ${lows || '（データなし）'}`
       </div>
 
       {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 10 }}>{error}</div>}
+
+      {/* ===== タブ: ブリーフィング（読む・キャッチアップ） ===== */}
+      {tab === 'brief' && (
+        <>
+          {/* キャッチアップ・ヘッダー */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 12, color: 'var(--ink2)' }}>
+              {newSinceVisit > 0
+                ? <>前回からの新着 <b style={{ color: '#2563eb' }}>{newSinceVisit}件</b> ／ </>
+                : <>新着なし ／ </>}
+              表示中 <b>{briefingList.length}件</b>
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+              {([[true, '下書きも表示'], [false, '公開済みのみ']] as [boolean, string][]).map(([v, l]) => (
+                <button key={l} onClick={() => setBriefShowDrafts(v)} style={chip(briefShowDrafts === v)}>{l}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* 30秒キャッチアップ要約 */}
+          <div style={{ background: 'var(--ink)', color: '#fff', borderRadius: 'var(--r)', padding: 16, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: briefSummary ? 10 : 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>⚡ 30秒キャッチアップ</div>
+              {briefMeta.generatedAt && <span style={{ fontSize: 10, opacity: 0.7 }}>{briefMeta.generatedAt.slice(0, 10)} 時点 / {briefMeta.count}件から</span>}
+              <button onClick={generateBriefing} disabled={briefGenLoading} style={{ marginLeft: 'auto', padding: '5px 12px', background: '#fff', color: 'var(--ink)', border: 'none', borderRadius: 'var(--r)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: briefGenLoading ? 0.6 : 1 }}>{briefGenLoading ? '生成中...' : briefSummary ? '🔄 更新' : '⚡ 要約を生成'}</button>
+            </div>
+            {briefSummary
+              ? <div style={{ fontSize: 12.5, lineHeight: 1.8, whiteSpace: 'pre-wrap', opacity: 0.95 }}>{briefSummary.replace(/^[-*]\s/gm, '・').replace(/^#+\s/gm, '')}</div>
+              : <div style={{ fontSize: 11, opacity: 0.75, marginTop: 8 }}>「⚡ 要約を生成」で、最新インサイトを「何が起きた→自社にどう効く」に圧縮します。</div>}
+          </div>
+
+          {loading && <div style={{ padding: '20px 0', color: 'var(--muted)', fontSize: 12 }}>読み込み中...</div>}
+          {!loading && briefingList.length === 0 && (
+            <div style={{ padding: '24px 0', color: 'var(--muted)', fontSize: 12, textAlign: 'center' }}>
+              インサイトがありません。右上の「🤖 新着を収集」または「🔌 ソース＆草案」から取り込めます。
+            </div>
+          )}
+
+          {/* 読むリスト */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {briefingList.map(it => {
+              const isNew = !!lastVisit && (it.createdAt || '') > lastVisit
+              const open = briefExpanded === it.id
+              return (
+                <div key={it.id} style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderLeft: `3px solid ${catColor[it.category] || '#666'}`, borderRadius: 'var(--r)', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {isNew && <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: '#2563eb', padding: '1px 7px', borderRadius: 10 }}>NEW</span>}
+                    <span style={{ fontSize: 9, fontWeight: 700, color: '#fff', background: catColor[it.category] || '#666', padding: '1px 7px', borderRadius: 10 }}>{it.category}</span>
+                    {(it.products || []).map(p => <span key={p} style={{ fontSize: 9, background: 'var(--bg)', border: '0.5px solid var(--b1)', color: 'var(--ink2)', padding: '1px 6px', borderRadius: 10 }}>{p}</span>)}
+                    {it.status === 'draft' && <span style={{ fontSize: 9, background: '#fef9c3', color: '#854d0e', padding: '1px 6px', borderRadius: 10, fontWeight: 600 }}>下書き</span>}
+                    {it.author && <span style={{ fontSize: 9, color: 'var(--muted)' }}>{it.author}</span>}
+                    <span style={{ fontSize: 9, color: 'var(--muted)', marginLeft: 'auto' }}>{it.publishedAt || (it.createdAt || '').slice(0, 10)}</span>
+                  </div>
+
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)', lineHeight: 1.4 }}>{it.title}</div>
+                  {it.summary && <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.7 }}>{it.summary}</div>}
+
+                  {it.relevance && (
+                    <div style={{ background: '#eff6ff', borderLeft: '2px solid #2563eb', borderRadius: 4, padding: '7px 10px' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#1d4ed8' }}>🎯 自社への意味：</span>
+                      <span style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6 }}>{it.relevance}</span>
+                    </div>
+                  )}
+                  {it.soWhat && (
+                    <div style={{ background: '#f0fdf4', borderLeft: '2px solid #16a34a', borderRadius: 4, padding: '7px 10px' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a' }}>💡 学び：</span>
+                      <span style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.6 }}>{it.soWhat}</span>
+                    </div>
+                  )}
+                  {(it.actions || []).length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 12, color: 'var(--ink)', fontWeight: 500 }}>→ 次の一手：{it.actions[0]}</span>
+                      <button onClick={() => toTask(it, it.actions[0])} style={{ fontSize: 9, padding: '2px 8px', borderRadius: 10, border: '0.5px solid var(--b1)', background: taskedAction === it.id + '::' + it.actions[0] ? 'var(--gbg)' : 'var(--bg)', color: taskedAction === it.id + '::' + it.actions[0] ? 'var(--green)' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>{taskedAction === it.id + '::' + it.actions[0] ? '✓ タスク化' : '→ タスク化'}</button>
+                    </div>
+                  )}
+
+                  {open && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '0.5px solid var(--b1)', paddingTop: 8 }}>
+                      {(it.points || []).length > 0 && <div><div style={detailLabel}>キーポイント</div>{(it.points || []).map((p, i) => <div key={i} style={bullet}>・{p}</div>)}</div>}
+                      {(it.actions || []).length > 1 && <div><div style={detailLabel}>その他のアクション</div>{(it.actions || []).slice(1).map((a, i) => <div key={i} style={bullet}>・{a}</div>)}</div>}
+                      {it.sourceRef && <div style={{ fontSize: 10, color: 'var(--muted)' }}>ソース：{/^https?:/.test(it.sourceRef) ? <a href={it.sourceRef} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb' }}>{it.sourceRef}</a> : it.sourceRef}</div>}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                    <button onClick={() => react(it, 'helpful')} style={reactBtn}>👍 役立った <b>{it.reactions?.helpful || 0}</b></button>
+                    <button onClick={() => react(it, 'learned')} style={reactBtn}>💡 学び <b>{it.reactions?.learned || 0}</b></button>
+                    {((it.points || []).length > 0 || (it.actions || []).length > 1 || it.sourceRef) && <button onClick={() => setBriefExpanded(open ? null : it.id)} style={{ ...miniBtn, marginLeft: 'auto' }}>{open ? '閉じる' : '詳しく'}</button>}
+                    {it.status === 'draft' && <button onClick={() => togglePublish(it)} style={{ ...miniBtn, marginLeft: (((it.points || []).length > 0 || (it.actions || []).length > 1 || it.sourceRef) ? 0 : 'auto'), background: 'var(--ink)', color: '#fff', border: 'none' }}>✓ 公開する</button>}
+                    <button onClick={() => openEdit(it)} style={miniBtn}>編集</button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
 
       {/* ===== タブ: インサイト ===== */}
       {tab === 'feed' && (
