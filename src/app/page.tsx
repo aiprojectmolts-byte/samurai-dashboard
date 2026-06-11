@@ -10,6 +10,7 @@ import MtgImport from './MtgImport'
 import ContentGen from './ContentGen'
 import Knowledge from './Knowledge'
 import Competitors from './Competitors'
+import Researcher from './Researcher'
 import CategorySettings from './CategorySettings'
 import PhaseSettings from './PhaseSettings'
 import Materials from './components/Materials'
@@ -292,6 +293,7 @@ export default function Dashboard() {
           <div className={`ni${view === 'materials' ? ' on' : ''}`} onClick={() => setView('materials')}>📄 資料</div>
           <div className={`ni${view === 'mtg-import' ? ' on' : ''}`} onClick={() => setView('mtg-import')}>MTGデータ取り込み</div>
           <div className={`ni${view === 'content-gen' ? ' on' : ''}`} onClick={() => setView('content-gen')}>発信コンテンツ生成</div>
+          <div className={`ni${view === 'researcher' ? ' on' : ''}`} onClick={() => setView('researcher')}>🔭 リサーチャー</div>
           <div className={`ni${view === 'knowledge' ? ' on' : ''}`} onClick={() => setView('knowledge')}>ナレッジベース</div>
           <div className={`ni${view === 'competitors' ? ' on' : ''}`} onClick={() => setView('competitors')}>競合情報</div>
         </aside>
@@ -474,6 +476,7 @@ export default function Dashboard() {
             )}
             {view === 'mtg-import' && <MtgImport />}
             {view === 'content-gen' && <ContentGen />}
+            {view === 'researcher' && <Researcher />}
             {view === 'knowledge' && <Knowledge />}
             {view === 'competitors' && <Competitors />}
             {view === 'category-settings' && <CategorySettings onCategoryChange={reloadTasks} />}
