@@ -133,6 +133,8 @@ export default function Researcher() {
   const [srcKind, setSrcKind] = useState<'all' | 'トレンド' | '競合' | 'ナレッジ'>('all')
   const [urlInput, setUrlInput] = useState('')
   const [ingestLoading, setIngestLoading] = useState(false)
+  const [autoRunning, setAutoRunning] = useState(false)
+  const [autoMsg, setAutoMsg] = useState('')
 
   // リサーチアジェンダ
   const [agenda, setAgenda] = useState<AgendaItem[]>([])
@@ -252,7 +254,9 @@ export default function Researcher() {
     setSaving(true); setError('')
     try {
       if (editId) {
-        const patch = { id: editId, ...form }
+        // 下書き→公開に切替えた場合は公開日を記録（新規作成・公開トグルと挙動を揃える）
+        const publishedAt = form.status === 'published' && !form.publishedAt ? new Date().toISOString().slice(0, 10) : form.publishedAt
+        const patch = { id: editId, ...form, publishedAt }
         await fetch('/api/insights', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
       } else {
         const entry: Insight = {
@@ -361,6 +365,26 @@ export default function Researcher() {
     setSrcLoading(false)
   }
   useEffect(() => { if (tab === 'sources' && sources.length === 0 && !srcLoading) loadSources() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 自走：自動収集バッチを今すぐ実行（毎日のVercel Cronと同じ /api/cron/research を叩く）
+  const runAutoCollect = async () => {
+    setAutoRunning(true); setAutoMsg(''); setError('')
+    try {
+      const r = await fetch('/api/cron/research')
+      const d = await r.json()
+      if (d.error) throw new Error(d.error)
+      if (d.created > 0) {
+        setAutoMsg(`✓ ${d.created}件の下書きを自動生成しました（📋インサイトの「下書き」に追加）`)
+        await load()
+        setTab('feed'); setFilterStatus('draft'); setError('')
+      } else {
+        setAutoMsg(d.message || '新規の収集対象はありませんでした')
+      }
+    } catch (e) {
+      setError('自動収集に失敗：' + String(e))
+    }
+    setAutoRunning(false)
+  }
 
   // 任意URL（競合プレスリリース・専門誌記事など）を取り込み → 本文を抽出してAI草案化
   const ingestUrl = async () => {
@@ -718,6 +742,17 @@ ${lows || '（データなし）'}`
       {tab === 'sources' && (
         <>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 10 }}>トレンド・競合・ナレッジに溜まった情報を横断表示。「→ AI草案化」で下書きインサイトに変換し、配信物として消化する。</div>
+
+          {/* 自走モード：人手なしで自動収集→草案化（毎日定期実行＋手動トリガー） */}
+          <div style={{ background: 'var(--ink)', borderRadius: 'var(--r)', padding: 14, marginBottom: 14, color: '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700 }}>🤖 自走モード（自動収集）</div>
+              <span style={{ fontSize: 10, opacity: 0.8, marginLeft: 'auto' }}>毎朝7時に自動実行</span>
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.85, margin: '6px 0 10px', lineHeight: 1.6 }}>担当者が何もしなくても、毎日 業界・競合ニュースを収集→AIがインサイト下書きを自動生成します。公開はあなたがレビューして判断（品質ゲート）。今すぐ走らせることもできます。</div>
+            <button onClick={runAutoCollect} disabled={autoRunning} style={{ padding: '6px 16px', background: '#fff', color: 'var(--ink)', border: 'none', borderRadius: 'var(--r)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: autoRunning ? 0.6 : 1 }}>{autoRunning ? '🤖 収集中...（最大1分）' : '▶ 今すぐ自動収集を実行'}</button>
+            {autoMsg && <span style={{ fontSize: 11, marginLeft: 10 }}>{autoMsg}</span>}
+          </div>
 
           {/* 任意URL取り込み：競合プレスリリース・専門誌記事を直接インサイト化 */}
           <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 12, marginBottom: 14 }}>
