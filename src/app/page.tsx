@@ -16,6 +16,7 @@ import PhaseSettings from './PhaseSettings'
 import Materials from './components/Materials'
 
 import { useState, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 
 type TaskStatus = 'todo' | 'doing' | 'thread-review' | 'review' | 'done' | 'waiting' | 'delayed'
 
@@ -65,8 +66,17 @@ const ownerLabel = { molts: 'THE MOLTS', samurai: 'SAMURAI', both: '共同' }
 const ownerClass = { molts: 'ob-m', samurai: 'ob-s', both: 'ob-b' }
 
 export default function Dashboard() {
-  const [view, setViewRaw] = useState('home')
-  const setView = (v: string) => { setViewRaw(v); if (v === 'home') fetch('/api/kpi').then(r => r.json()).then(data => { if (data && Object.keys(data).length > 0) setKpi((k: typeof kpi) => ({...k, ...data})) }).catch(() => {}) }
+  const pathname = usePathname()
+  const [view, setViewRaw] = useState(pathname === '/content-gen' ? 'content-gen' : 'home')
+  // 発信コンテンツ生成は独立URL(/content-gen)に区切る。他タブは / 。直リンク・リロードに対応。
+  const setView = (v: string) => {
+    setViewRaw(v)
+    if (typeof window !== 'undefined') {
+      const url = v === 'content-gen' ? '/content-gen' : '/'
+      if (window.location.pathname !== url) window.history.replaceState(null, '', url)
+    }
+    if (v === 'home') fetch('/api/kpi').then(r => r.json()).then(data => { if (data && Object.keys(data).length > 0) setKpi((k: typeof kpi) => ({...k, ...data})) }).catch(() => {})
+  }
   const [tasks, setTasks] = useState<Task[]>(defaultTasks)
   const [saving, setSaving] = useState(false)
   const [kpi, setKpi] = useState({
@@ -293,7 +303,7 @@ export default function Dashboard() {
           <div className={`ni${view === 'materials' ? ' on' : ''}`} onClick={() => setView('materials')}>📄 資料</div>
           <div className={`ni${view === 'mtg-import' ? ' on' : ''}`} onClick={() => setView('mtg-import')}>MTGデータ取り込み</div>
           <div className={`ni${view === 'content-gen' ? ' on' : ''}`} onClick={() => setView('content-gen')}>発信コンテンツ生成</div>
-          <div className={`ni${view === 'researcher' ? ' on' : ''}`} onClick={() => setView('researcher')}>🔭 リサーチャー</div>
+          <a href="/researcher" className="ni" style={{ textDecoration: 'none' }}>🔭 リサーチャー</a>
           <div className={`ni${view === 'knowledge' ? ' on' : ''}`} onClick={() => setView('knowledge')}>ナレッジベース</div>
           <div className={`ni${view === 'competitors' ? ' on' : ''}`} onClick={() => setView('competitors')}>競合情報</div>
         </aside>
