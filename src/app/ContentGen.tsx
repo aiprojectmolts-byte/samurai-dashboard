@@ -4,6 +4,10 @@ import { INTERVIEW_EXAMPLES } from './components/interviewExamples'
 import { useState, useRef, useEffect } from 'react'
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from 'docx'
 import { saveAs } from 'file-saver'
+import {
+  splitBlocks, applyApproved, charDiff, newSuggestionId,
+  type ArticleSuggestion,
+} from './components/articleSuggestions'
 
 interface Plan {
   title: string
@@ -47,6 +51,7 @@ interface Content {
 interface FinalResult {
   plan: EditedPlan
   content: Content
+  articleId?: string  // 提案モードのアンカー先（生成時に採番、保存時に永続化）
 }
 
 const PROMPT_CONTENT = `このドキュメントから、外部発信できる重要なトピックと洞察を抽出してください。
@@ -114,6 +119,27 @@ export default function ContentGen() {
   const [interviewStep, setInterviewStep] = useState<'setup' | 'outline'>('setup')
   const [outlineLoading, setOutlineLoading] = useState(false)
   const [interviewOutline, setInterviewOutline] = useState<{ titles: string[]; angle: string; sections: { heading: string; summary: string }[] } | null>(null)
+  // 記事確認：提案モード（Googleドキュメント方式）
+  const [reviewerName, setReviewerName] = useState('')          // 自分（提案者/承認者の実名）
+  const [memberNames, setMemberNames] = useState<string[]>([])  // /api/members から取得
+  const [suggestions, setSuggestions] = useState<ArticleSuggestion[]>([]) // 表示中記事の提案一覧
+  const [previewApproved, setPreviewApproved] = useState(false) // false=元 / true=承認後
+  const [sugDraftBlock, setSugDraftBlock] = useState<number | null>(null) // 提案入力を開いているブロック
+  const [sugDraftText, setSugDraftText] = useState('')
+
+  // レビュアー候補とローカル保存した自分の名前を初期ロード
+  useEffect(() => {
+    try { const n = localStorage.getItem('samurai:reviewer-name'); if (n) setReviewerName(n) } catch {}
+    fetch('/api/members').then(res => res.json()).then((d: any) => {
+      const names = [...(d?.samurai || []), ...(d?.molts || [])].filter((x: string) => x && x !== 'その他')
+      setMemberNames(names)
+    }).catch(() => {})
+  }, [])
+
+  const pickReviewer = (name: string) => {
+    setReviewerName(name)
+    try { localStorage.setItem('samurai:reviewer-name', name) } catch {}
+  }
 
   const copyDoc = async (idx: number, doc: string) => {
     try {
@@ -910,6 +936,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
       )
       const finalResults = editedPlans.map((plan, i) => ({
         plan,
+        articleId: newSuggestionId('art'),
         content: result.results[i] || result.results[0]
       }))
       setResults(finalResults)
@@ -934,6 +961,77 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
   }
 
   const r = results[selectedResult]
+  const currentArticleId = r?.articleId
+
+  // 表示中記事の提案を読み込む（記事ごとキー）
+  useEffect(() => {
+    if (!currentArticleId) { setSuggestions([]); return }
+    let cancelled = false
+    fetch(`/api/article-suggestions?articleId=${encodeURIComponent(currentArticleId)}`)
+      .then(res => res.json())
+      .then((d: any) => { if (!cancelled) setSuggestions(Array.isArray(d) ? d : []) })
+      .catch(() => { if (!cancelled) setSuggestions([]) })
+    return () => { cancelled = true }
+  }, [currentArticleId])
+
+  // 楽観更新 → サーバの merge-save 結果（supersede 反映済み）で確定
+  const saveSuggestions = async (next: ArticleSuggestion[]) => {
+    if (!currentArticleId) return
+    setSuggestions(next)
+    try {
+      const res = await fetch('/api/article-suggestions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ articleId: currentArticleId, suggestions: next }),
+      })
+      const saved = await res.json()
+      if (Array.isArray(saved)) setSuggestions(saved)
+    } catch {}
+  }
+
+  const addSuggestion = (blockIndex: number, original: string, proposed: string) => {
+    if (!reviewerName) { alert('先にレビュアー名を選んでください'); return }
+    if (!proposed.trim() || proposed.trim() === original.trim()) { setSugDraftBlock(null); setSugDraftText(''); return }
+    if (!currentArticleId) return
+    const s: ArticleSuggestion = {
+      id: newSuggestionId('sug'), articleId: currentArticleId, target: 'noteBody', blockIndex,
+      original, proposed: proposed.trim(), status: 'pending', proposer: reviewerName, createdAt: new Date().toISOString(),
+    }
+    saveSuggestions([s, ...suggestions])
+    setSugDraftBlock(null); setSugDraftText('')
+  }
+
+  const decideSuggestion = (s: ArticleSuggestion, status: 'approved' | 'rejected') => {
+    if (!reviewerName) { alert('先にレビュアー名を選んでください'); return }
+    const note = status === 'rejected' ? (window.prompt('却下の理由（任意）') || '') : ''
+    saveSuggestions(suggestions.map(x => x.id === s.id
+      ? { ...x, status, approver: reviewerName, note, decidedAt: new Date().toISOString() }
+      : x))
+  }
+
+  // プレビュー／書き出しに流す内容（元 or 承認後）。原文(results)は決して上書きしない。
+  const viewContent = r ? (previewApproved ? applyApproved(r.content, suggestions) : r.content) : null
+  const approvedCount = suggestions.filter(s => s.status === 'approved').length
+
+  // 承認後の内容を確定版として content-writings に別バージョン保存（任意・非破壊）
+  const saveApprovedVersion = async () => {
+    if (!r || !viewContent) return
+    await fetch('/api/content-writings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        results: [{ plan: r.plan, content: viewContent, articleId: newSuggestionId('art'), derivedFrom: currentArticleId }],
+        date: new Date().toLocaleDateString('ja-JP'), fileNames, version: 'approved',
+      }),
+    })
+    alert('承認後の内容を確定版として保存しました')
+  }
+
+  // 文字単位 diff のレンダリング
+  const renderDiff = (original: string, proposed: string) =>
+    charDiff(original, proposed).map((seg, i) =>
+      seg.type === 'equal' ? <span key={i}>{seg.value}</span>
+      : seg.type === 'del' ? <del key={i} style={{ background: 'var(--rbg)', color: 'var(--red)' }}>{seg.value}</del>
+      : <ins key={i} style={{ background: 'var(--gbg)', color: 'var(--green)', textDecoration: 'none' }}>{seg.value}</ins>
+    )
 
   return (
     <div style={{ maxWidth: 820 }}>
@@ -1421,18 +1519,92 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                   </>
                 )}
                 {writingTab === 'note' && writingMode !== 'x' && (
-                  <div style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: '24px 28px', position: 'relative' as const }}>
-                    <button onClick={() => navigator.clipboard.writeText(`${r.content.noteTitle}\n\n${r.content.noteBody}`)} style={{ position: 'absolute' as const, top: 12, right: 12, fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'var(--paper)', cursor: 'pointer', fontFamily: 'inherit' }}>コピー</button>
-                    <h1 style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.5, marginBottom: 20, paddingRight: 60 }}>{r.content.noteTitle}</h1>
-                    <ReactMarkdown components={{
-                      h1: ({children}) => <h1 style={{ fontSize: 18, fontWeight: 700, margin: '20px 0 10px', borderBottom: '1px solid var(--b1)', paddingBottom: 6 }}>{children}</h1>,
-                      h2: ({children}) => <h2 style={{ fontSize: 15, fontWeight: 700, margin: '16px 0 8px' }}>{children}</h2>,
-                      h3: ({children}) => <h3 style={{ fontSize: 13, fontWeight: 700, margin: '12px 0 6px' }}>{children}</h3>,
-                      p: ({children}) => <p style={{ margin: '0 0 12px', lineHeight: 1.9, fontSize: 13 }}>{children}</p>,
-                      strong: ({children}) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
-                      ul: ({children}) => <ul style={{ paddingLeft: 20, margin: '4px 0 12px' }}>{children}</ul>,
-                      li: ({children}) => <li style={{ marginBottom: 6, lineHeight: 1.8, fontSize: 13 }}>{children}</li>,
-                    }}>{r.content.noteBody}</ReactMarkdown>
+                  <div>
+                    {/* レビュアー選択（実名を localStorage に記憶。提案者≠承認者でも成立） */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const, marginBottom: 10 }}>
+                      <span style={{ fontSize: 11, color: 'var(--muted)' }}>あなた（レビュアー）:</span>
+                      {memberNames.map(n => (
+                        <button key={n} onClick={() => pickReviewer(n)} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 14, border: '0.5px solid ' + (reviewerName === n ? 'var(--ink)' : 'var(--b1)'), background: reviewerName === n ? 'var(--ink)' : 'none', color: reviewerName === n ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit' }}>{n}</button>
+                      ))}
+                      {!reviewerName && <span style={{ fontSize: 11, color: 'var(--red)' }}>← 選ぶと提案・承認できます</span>}
+                    </div>
+
+                    {/* プレビュー切替（元 / 承認後）＋ 表示中バージョンの書き出し */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const, marginBottom: 10 }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => setPreviewApproved(false)} style={{ fontSize: 11, padding: '4px 12px', borderRadius: 16, border: '0.5px solid ' + (!previewApproved ? 'var(--ink)' : 'var(--b1)'), background: !previewApproved ? 'var(--ink)' : 'none', color: !previewApproved ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit' }}>元（提案なし）</button>
+                        <button onClick={() => setPreviewApproved(true)} style={{ fontSize: 11, padding: '4px 12px', borderRadius: 16, border: '0.5px solid ' + (previewApproved ? 'var(--green)' : 'var(--b1)'), background: previewApproved ? 'var(--gbg)' : 'none', color: previewApproved ? 'var(--green)' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: previewApproved ? 700 : 500 }}>承認後（{approvedCount}件適用）</button>
+                      </div>
+                      <div style={{ flex: 1 }} />
+                      <button onClick={() => viewContent && exportPDF(viewContent.noteTitle || 'note', writingSections([{ plan: r.plan, content: viewContent }], 'note'))} style={{ fontSize: 11, padding: '4px 10px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📄 この表示でPDF</button>
+                      <button onClick={() => viewContent && exportWord(viewContent.noteTitle || 'note', writingSections([{ plan: r.plan, content: viewContent }], 'note'))} style={{ fontSize: 11, padding: '4px 10px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📝 この表示でWord</button>
+                      {previewApproved && approvedCount > 0 && (
+                        <button onClick={saveApprovedVersion} style={{ fontSize: 11, padding: '4px 10px', border: '0.5px solid var(--green)', borderRadius: 'var(--r)', background: 'var(--gbg)', color: 'var(--green)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>💾 確定版を保存</button>
+                      )}
+                    </div>
+
+                    {/* プレビュー本文（元 or 承認後） */}
+                    <div style={{ background: 'var(--bg)', borderRadius: 'var(--r)', padding: '24px 28px', position: 'relative' as const, marginBottom: 14, border: previewApproved ? '1px solid var(--green)' : '0.5px solid var(--b1)' }}>
+                      <button onClick={() => viewContent && navigator.clipboard.writeText(`${viewContent.noteTitle}\n\n${viewContent.noteBody}`)} style={{ position: 'absolute' as const, top: 12, right: 12, fontSize: 10, padding: '2px 8px', border: '0.5px solid var(--b1)', borderRadius: 10, background: 'var(--paper)', cursor: 'pointer', fontFamily: 'inherit' }}>コピー</button>
+                      <h1 style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.5, marginBottom: 20, paddingRight: 60 }}>{(viewContent || r.content).noteTitle}</h1>
+                      <ReactMarkdown components={{
+                        h1: ({children}) => <h1 style={{ fontSize: 18, fontWeight: 700, margin: '20px 0 10px', borderBottom: '1px solid var(--b1)', paddingBottom: 6 }}>{children}</h1>,
+                        h2: ({children}) => <h2 style={{ fontSize: 15, fontWeight: 700, margin: '16px 0 8px' }}>{children}</h2>,
+                        h3: ({children}) => <h3 style={{ fontSize: 13, fontWeight: 700, margin: '12px 0 6px' }}>{children}</h3>,
+                        p: ({children}) => <p style={{ margin: '0 0 12px', lineHeight: 1.9, fontSize: 13 }}>{children}</p>,
+                        strong: ({children}) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
+                        ul: ({children}) => <ul style={{ paddingLeft: 20, margin: '4px 0 12px' }}>{children}</ul>,
+                        li: ({children}) => <li style={{ marginBottom: 6, lineHeight: 1.8, fontSize: 13 }}>{children}</li>,
+                      }}>{(viewContent || r.content).noteBody}</ReactMarkdown>
+                    </div>
+
+                    {/* レビュー：ブロック単位の提案・承認/却下 */}
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.08em', textTransform: 'uppercase' as const, marginBottom: 8 }}>✏️ レビュー（ブロックごとに提案）</div>
+                    {splitBlocks(r.content.noteBody).map((block, bi) => {
+                      const group = suggestions.filter(s => s.target === 'noteBody' && s.blockIndex === bi)
+                      const hasApproved = group.some(s => s.status === 'approved')
+                      return (
+                        <div key={bi} style={{ border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 12, marginBottom: 8, background: 'var(--paper)' }}>
+                          <div style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--ink)', whiteSpace: 'pre-wrap' as const }}>{block}</div>
+                          {sugDraftBlock !== bi && (
+                            <button onClick={() => { setSugDraftBlock(bi); setSugDraftText(block) }} style={{ marginTop: 8, fontSize: 10, padding: '3px 10px', border: '0.5px solid var(--b1)', borderRadius: 12, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>✏️ このブロックを提案</button>
+                          )}
+                          {sugDraftBlock === bi && (
+                            <div style={{ marginTop: 8 }}>
+                              <textarea value={sugDraftText} onChange={e => setSugDraftText(e.target.value)} style={{ ...inp, minHeight: 80, lineHeight: 1.7, resize: 'vertical' as const, boxSizing: 'border-box' as const }} />
+                              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                                <button onClick={() => addSuggestion(bi, block, sugDraftText)} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--ink)', borderRadius: 14, background: 'var(--ink)', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>提案を送る</button>
+                                <button onClick={() => { setSugDraftBlock(null); setSugDraftText('') }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 14, background: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--ink2)' }}>キャンセル</button>
+                              </div>
+                            </div>
+                          )}
+                          {group.map(s => {
+                            const badge = s.status === 'approved' ? { t: '✅ 承認済み', c: 'var(--green)' }
+                              : s.status === 'rejected' ? { t: '✗ 却下', c: 'var(--red)' }
+                              : s.status === 'superseded' ? { t: '↩︎ 取り消し（他を承認）', c: 'var(--muted)' }
+                              : { t: '⏳ 未判断', c: 'var(--ink2)' }
+                            const conflict = s.status === 'pending' && hasApproved
+                            return (
+                              <div key={s.id} style={{ marginTop: 8, paddingTop: 8, borderTop: '0.5px solid var(--b1)' }}>
+                                <div style={{ fontSize: 12, lineHeight: 1.9, whiteSpace: 'pre-wrap' as const, wordBreak: 'break-word' as const }}>{renderDiff(s.original, s.proposed)}</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const, marginTop: 6 }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: badge.c }}>{badge.t}</span>
+                                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>提案: {s.proposer}{s.approver ? `／判断: ${s.approver}` : ''}</span>
+                                  {conflict && <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--red)' }}>競合（このブロックは承認済み）</span>}
+                                  {s.note && <span style={{ fontSize: 10, color: 'var(--ink2)' }}>理由: {s.note}</span>}
+                                  {s.status === 'pending' && (
+                                    <>
+                                      <button onClick={() => decideSuggestion(s, 'approved')} disabled={conflict} style={{ fontSize: 10, padding: '2px 10px', border: '0.5px solid var(--green)', borderRadius: 10, background: conflict ? 'none' : 'var(--gbg)', color: conflict ? 'var(--muted)' : 'var(--green)', cursor: conflict ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: conflict ? 0.5 : 1 }}>承認</button>
+                                      <button onClick={() => decideSuggestion(s, 'rejected')} style={{ fontSize: 10, padding: '2px 10px', border: '0.5px solid var(--red)', borderRadius: 10, background: 'none', color: 'var(--red)', cursor: 'pointer', fontFamily: 'inherit' }}>却下</button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
