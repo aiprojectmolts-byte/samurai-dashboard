@@ -13,10 +13,12 @@ interface Task {
 
 interface Members { samurai: string[]; molts: string[] }
 
+interface QuestionInput { content: string; assignee: string; deadline: string; priority: 'urgent' | 'normal' }
+
 interface Props {
   task: Task | null
   members: Members
-  onSave: (task: Task, isNew: boolean) => void
+  onSave: (task: Task, isNew: boolean, question?: QuestionInput) => void
   onDelete: (task: Task) => void
   onClose: () => void
 }
@@ -34,6 +36,17 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
 
   const [categories, setCategories] = useState<string[]>([])
   const [phases, setPhases] = useState<{ id: string; name: string; order: number }[]>([])
+
+  // 質問シート登録セクション
+  const [toQuestion, setToQuestion] = useState(false)
+  const [qForm, setQForm] = useState<QuestionInput>({
+    content: task?.impact?.trim() || task?.name || '',
+    assignee: '',
+    deadline: task?.e || '',
+    priority: task?.blocker ? 'urgent' : 'normal',
+  })
+  const setQ = <K extends keyof QuestionInput>(k: K, v: QuestionInput[K]) => setQForm(f => ({ ...f, [k]: v }))
+
   useEffect(() => {
     fetch('/api/categories')
       .then(r => r.json())
@@ -43,7 +56,25 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
       .then(r => r.json())
       .then((data: { id: string; name: string; order: number }[]) => { if (Array.isArray(data)) setPhases([...data].sort((a, b) => (a.order || 0) - (b.order || 0))) })
       .catch(() => {})
-  }, [])
+    // 既に質問シートへ登録済みなら、その質問の現在値をプリフィルして編集できるようにする
+    if (task?.linkedQuestionId) {
+      fetch('/api/questions')
+        .then(r => r.json())
+        .then((data: any[]) => {
+          const q = Array.isArray(data) ? data.find(x => x?.id === task.linkedQuestionId) : null
+          if (q) {
+            setToQuestion(true)
+            setQForm({
+              content: q.content || q.text || '',
+              assignee: q.assignee || '',
+              deadline: q.deadline || '',
+              priority: q.priority === 'high' || q.priority === 'urgent' ? 'urgent' : 'normal',
+            })
+          }
+        })
+        .catch(() => {})
+    }
+  }, [task])
 
   // 「未分類」を先頭に。既存タスクの施策値が一覧に無い場合も選択肢に含めて後方互換を保つ
   const categoryOptions = Array.from(new Set(['未分類', ...categories, form.施策].filter(Boolean)))
@@ -51,6 +82,14 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
   const assigneeList = form.own === 'molts' ? members.molts
     : form.own === 'samurai' ? members.samurai
     : [...members.molts, ...members.samurai]
+  const allMembers = [...members.samurai, ...members.molts]
+
+  const handleSave = () => {
+    if (!form.name.trim()) return
+    const question = toQuestion && qForm.content.trim() ? qForm : undefined
+    onSave(form, isNew, question)
+    onClose()
+  }
 
   return (
     <div style={overlay} onClick={onClose}>
@@ -162,12 +201,48 @@ export default function TaskModal({ task, members, onSave, onDelete, onClose }: 
             備考・FBメモ
             <textarea value={form.備考 ?? ''} onChange={e => set('備考', e.target.value)} style={{ ...inp, minHeight: 72, resize: 'vertical' }} placeholder="定例での確認事項・フィードバックメモなど（任意）" />
           </label>
+
+          {/* 質問シート連携 */}
+          <div style={{ border: '0.5px solid var(--b1)', borderRadius: 6, padding: 12, background: toQuestion ? '#fffdf5' : 'transparent' }}>
+            <label style={{ ...lbl, flexDirection: 'row', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={toQuestion} onChange={e => setToQuestion(e.target.checked)} style={{ width: 14, height: 14, accentColor: 'var(--ink)' }} />
+              <span style={{ fontSize: 12, color: 'var(--ink)', fontWeight: 600 }}>❓ このタスクを質問シートに登録する</span>
+            </label>
+            {toQuestion && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+                <label style={lbl}>
+                  質問内容
+                  <textarea value={qForm.content} onChange={e => setQ('content', e.target.value)} style={{ ...inp, minHeight: 56, resize: 'vertical' }} placeholder="回答・承認してほしい内容（例：ドメイン構成はどれにするか？）" />
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <label style={lbl}>
+                    回答者
+                    <select value={qForm.assignee} onChange={e => setQ('assignee', e.target.value)} style={inp}>
+                      <option value="">指定なし</option>
+                      {allMembers.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </label>
+                  <label style={lbl}>回答期日<input type="date" value={qForm.deadline} onChange={e => setQ('deadline', e.target.value)} style={inp} /></label>
+                </div>
+                <label style={lbl}>
+                  優先度
+                  <select value={qForm.priority} onChange={e => setQ('priority', e.target.value as QuestionInput['priority'])} style={inp}>
+                    <option value="normal">通常</option>
+                    <option value="urgent">最優先</option>
+                  </select>
+                </label>
+                <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.5 }}>
+                  保存すると質問シートに{form.linkedQuestionId ? '反映' : '追加'}され、このタスクと相互リンクされます。
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'flex-end' }}>
           {!isNew && <button onClick={() => { onDelete(form); onClose() }} style={delBtn}>削除</button>}
           <button onClick={onClose} style={cancelBtn}>キャンセル</button>
-          <button onClick={() => { if (form.name.trim()) { onSave(form, isNew); onClose() } }} style={saveBtn}>保存</button>
+          <button onClick={handleSave} style={saveBtn}>保存</button>
         </div>
       </div>
     </div>

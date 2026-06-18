@@ -66,18 +66,36 @@ const statusLabel: Record<TaskStatus, string> = {
 const ownerLabel = { molts: 'THE MOLTS', samurai: 'SAMURAI', both: '共同' }
 const ownerClass = { molts: 'ob-m', samurai: 'ob-s', both: 'ob-b' }
 
+// 各タブを独立URLに区切る。スラッグ＝view名（home は / ）。直リンク・リロード・戻る/進むに対応。
+const VIEW_SLUGS = [
+  'home', 'kpi', 'schedule', 'tasks', 'questions', 'settings', 'phase-settings',
+  'category-settings', 'members', 'slack', 'materials', 'mtg-import',
+  'content-gen', 'content-brief', 'researcher', 'knowledge', 'competitors',
+]
+const viewFromPath = (p: string) => {
+  const seg = p === '/' ? 'home' : p.replace(/^\//, '')
+  return VIEW_SLUGS.includes(seg) ? seg : 'home'
+}
+const pathForView = (v: string) => (v === 'home' ? '/' : `/${v}`)
+
 export default function Dashboard() {
   const pathname = usePathname()
-  const [view, setViewRaw] = useState(pathname === '/content-gen' ? 'content-gen' : pathname === '/researcher' ? 'researcher' : 'home')
-  // 発信コンテンツ生成(/content-gen)・リサーチャー(/researcher)は独立URLに区切る。他タブは / 。直リンク・リロードに対応。
+  const [view, setViewRaw] = useState(() => viewFromPath(pathname))
   const setView = (v: string) => {
     setViewRaw(v)
     if (typeof window !== 'undefined') {
-      const url = v === 'content-gen' ? '/content-gen' : v === 'researcher' ? '/researcher' : '/'
-      if (window.location.pathname !== url) window.history.replaceState(null, '', url)
+      const url = pathForView(v)
+      if (window.location.pathname !== url) window.history.pushState(null, '', url)
     }
     if (v === 'home') fetch('/api/kpi').then(r => r.json()).then(data => { if (data && Object.keys(data).length > 0) setKpi((k: typeof kpi) => ({...k, ...data})) }).catch(() => {})
   }
+
+  // 戻る/進む（popstate）でURLとviewを同期させ、各タブを本物のページのように扱う
+  useEffect(() => {
+    const onPop = () => setViewRaw(viewFromPath(window.location.pathname))
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
   const [tasks, setTasks] = useState<Task[]>(defaultTasks)
   const [saving, setSaving] = useState(false)
   const [kpi, setKpi] = useState({
@@ -111,16 +129,49 @@ export default function Dashboard() {
     setSaving(false)
   }
 
-  const saveTask = async (task: Task, isNew: boolean) => {
+  // タスクから質問シートへ1件登録/更新する（linkedQuestionId で双方向リンク）。
+  // 返り値は紐づけた質問ID（タスク保存側で linkedQuestionId に書き戻す）。
+  const registerQuestionForTask = async (task: Task, q: { content: string; assignee: string; deadline: string; priority: 'urgent' | 'normal' }) => {
+    const qid = task.linkedQuestionId || (Date.now().toString() + 'q' + Math.random().toString(36).slice(2))
+    await fetch('/api/questions', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: qid, taskName: task.name, content: q.content, assignee: q.assignee,
+        deadline: q.deadline, priority: q.priority, status: 'open', answer: '',
+        createdAt: new Date().toISOString().slice(0, 10), source: 'task',
+      }),
+    })
+    return qid
+  }
+
+  const saveTask = async (task: Task, isNew: boolean, question?: { content: string; assignee: string; deadline: string; priority: 'urgent' | 'normal' }) => {
+    let t = task
+    // 「質問シートに登録」が指定されていれば、質問を作成/更新して linkedQuestionId を書き戻す
+    if (question && question.content.trim()) {
+      const qid = await registerQuestionForTask(task, question)
+      t = { ...task, linkedQuestionId: qid }
+    }
     let updated: Task[]
     if (isNew) {
-      updated = [...tasks, task]
+      updated = [...tasks, t]
     } else {
       // id で照合（name は編集対象なので name 一致だと改名時にマッチせず変更が失われる）
-      updated = tasks.map(t => (t.id ?? t.name) === (task.id ?? task.name) ? task : t)
+      updated = tasks.map(x => (x.id ?? x.name) === (t.id ?? t.name) ? t : x)
     }
     setTasks(updated)
     await fetch('/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+  }
+
+  // タスク行からのワンクリック登録。タスク内容から既定値を組み立てて質問シートへ送る。
+  const quickRegisterQuestion = async (task: Task) => {
+    const q = {
+      content: task.impact?.trim() || task.name,
+      assignee: '',
+      deadline: task.e || '',
+      priority: (task.blocker ? 'urgent' : 'normal') as 'urgent' | 'normal',
+    }
+    await saveTask(task, false, q)
   }
 
   const deleteTask = async (task: Task) => {
@@ -430,7 +481,7 @@ export default function Dashboard() {
             )}
 
             {/* タスクトラッカー */}
-            {view === 'tasks' && <TaskTracker tasks={tasks} members={members} onStatusChange={(idx, st) => updateTaskStatus(idx, st as any)} onBulkStatusChange={(names, st) => bulkUpdateStatus(names, st as any)} onOpenModal={(t) => setModalTask(t)} onDelete={deleteTask} />}
+            {view === 'tasks' && <TaskTracker tasks={tasks} members={members} onStatusChange={(idx, st) => updateTaskStatus(idx, st as any)} onBulkStatusChange={(names, st) => bulkUpdateStatus(names, st as any)} onOpenModal={(t) => setModalTask(t)} onDelete={deleteTask} onRegisterQuestion={quickRegisterQuestion} />}
             {view === 'kpi' && <KpiView />}
             {view === 'settings' && (
               <div>

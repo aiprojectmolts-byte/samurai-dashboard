@@ -19,6 +19,14 @@ interface Plan {
   userGoal?: string     // ユーザーのゴール・得られる結果
   story?: string        // 必要な要素とストーリー（構成）
   outline?: { heading: string, subheadings?: string[], description?: string }[]  // 記事目次（大見出し＋小見出し）
+  // 加藤オーサーシップ（「自分の名前で出したい」を判断するための骨子）
+  authorReason?: string   // なぜ加藤がこれを語る必然があるか（使う実体験・原体験）
+  readerQuestion?: string // 読者の切実な問い
+  readerChange?: string   // 読後に読者がどう変わるか
+  trustPath?: string      // なぜ相談・利用したくなるか（信頼の作られ方）
+  lead?: string           // 書き出し案（加藤の一人称・声で）
+  authorScore?: number    // 加藤が出したい度（0〜100）
+  authorNotes?: string    // 出したい理由 / 懸念
 }
 
 interface Expression {
@@ -58,6 +66,36 @@ const PROMPT_CONTENT = `このドキュメントから、外部発信できる�
 const PROMPT_GENERAL = `このドキュメントの要点を構造化してまとめてください。
 日付・種類・概要・重要ポイント・キーワードを含めてください。`
 
+// 加藤利基ライター人格ブリーフ（正本の写し）。全エージェントの判断の土台として注入する。
+// ※ガラケー比喩を"軸"にしない等のガードレールをここに集約し、散在していた人格定義を一元化する。
+const DEFAULT_PERSONA = `# 加藤利基ライター人格ブリーフ（全AI生成の判断の土台）
+
+## 役割
+SAMURAI ARCHITECTS 代表・加藤利基として書く。目的は売り込みではなく、建築DX領域で「相談先＝侍」という信頼を一本ずつ積むこと。
+
+## 思想の核（本題は必ずここに着地）
+- 中小工務店への伴走：家業が工務店で、その現場の課題感から起業。本丸は中小。変革は断罪せず「どっちの意見も分かる」共感者。
+- バックキャスト設計：イメージ→図面→建材の逆算で、小規模事務所でも高品質な設計を＝空間デザインの民主化。
+- システムだけでは変わらない：俗人的な業界。ワークフロー・人材育成・ブランディングまで含めた伴走。
+- 建築家の役割の再定義：デザイン制作だけでなく、空間体験の設計・マーケティング的価値創造へ。
+- 二項融合：カタチ（建築）×施策（経営）、ハード×ソフト。
+- ミッション：Create a Better Place with Technology。
+
+## 文体
+- 加藤の一人称。決意表明調で謙虚。語尾は「〜です／ます／ではないでしょうか／と感じています」。「〜である／だ」体・話し言葉は使わない。
+- 抽象ビジョン↔具体数値の往復。断定より観察（「〜という印象がある」「〜のではないだろうか」）。
+- 原体験（家業・現場・KBS）を根拠にする。
+
+## ガードレール（厳守）
+- 比喩（ポケベル→ガラケー→スマホ）は冒頭の"入口の一言"に留め、記事の軸・タイトルにしない。直後に本題（伴走／バックキャスト／民主化）へ折り返す。
+- 最大値の誇張をしない。数値は前提・中央値・出典つきで正直に。引用数値は引用と明記する。
+- 中小工務店・設計事務所を見下さない・煽らない。
+- 守秘：顧客名・商談・未発表の組織情報（子会社構想・Salesforce等）・取引先名は出さず、業界全体の話に抽象化する。
+- 機能自慢で終わらせず、必ず社会的意義・思想へ接続して締める。
+
+## 4プロダクト
+Rendery（建築特化型画像生成AI）／ knock knock AI（AIホームステージング）／ VISIOAL（空間ビジュアライゼーション）／ カスタムソリューション（AI受託開発）。`
+
 // AIレスポンスの型ゆれに耐える安全アクセサ
 const safeText = (v: any): string =>
   v == null ? '' : Array.isArray(v) ? v.map((x: any) => (typeof x === 'string' ? x : (x?.text || x?.heading || ''))).filter(Boolean).join('\n') : (typeof v === 'string' ? v : String(v))
@@ -77,6 +115,14 @@ const safeBullets = (v: any): string[] => {
     .filter(Boolean)
 }
 
+// AI応答から先頭{〜末尾}を取り出してパース（前後の説明文やコードフェンスに耐える）
+const extractJsonObj = (raw: string): any => {
+  const t = (raw || '').replace(/```json|```/g, '').trim()
+  const s = t.indexOf('{'), e = t.lastIndexOf('}')
+  if (s === -1 || e === -1 || e < s) throw new Error('AI応答からJSONを抽出できませんでした')
+  return JSON.parse(t.slice(s, e + 1))
+}
+
 export default function ContentGen() {
   const [text, setText] = useState('')
   const [step, setStep] = useState<'input'|'planning'|'editing'|'writing'|'done'>('input')
@@ -94,6 +140,27 @@ export default function ContentGen() {
   const [publishTarget, setPublishTarget] = useState<'kato_note' | 'company_x' | 'both'>('kato_note')
   const [selectedHistoryPlans, setSelectedHistoryPlans] = useState<any[]>([])
   const [error, setError] = useState('')
+  // 加藤ライター人格ブリーフ（正本の写し）と、加藤の企画採否
+  const [persona, setPersona] = useState(DEFAULT_PERSONA)
+  const [verdicts, setVerdicts] = useState<Record<number, 'publish' | 'revise' | 'reject'>>({})
+  useEffect(() => {
+    fetch('/api/writer-persona').then(r => r.json()).then(d => { if (d?.brief?.trim()) setPersona(d.brief) }).catch(() => {})
+  }, [])
+  // 人格ブリーフを各エージェントのsystem先頭に注入（散在していた人格定義を一元化）
+  const personaBlock = () => `# 参照：加藤利基ライター人格ブリーフ（この思想・文体・ガードレールに必ず従う）\n${(persona || DEFAULT_PERSONA).trim()}\n\n---\n\n`
+  // 加藤の採否を記録（"自分の名前で出したい率"を上げる学習信号）
+  const saveDecision = async (i: number, verdict: 'publish' | 'revise' | 'reject', p: Plan) => {
+    setVerdicts(prev => ({ ...prev, [i]: verdict }))
+    const note = (verdict === 'revise' || verdict === 'reject')
+      ? (window.prompt(verdict === 'revise' ? 'どこを直したいですか？（任意）' : '却下の理由（任意）') || '')
+      : ''
+    try {
+      await fetch('/api/plan-decisions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planKey: new Date().toISOString().slice(0, 10) + '::' + (p.title || ''), title: p.title || '', verdict, note, authorScore: p.authorScore ?? null }),
+      })
+    } catch {}
+  }
   const fileRef = useRef<HTMLInputElement>(null)
   const [history, setHistory] = useState<any[]>([])
   const [showHistory, setShowHistory] = useState(false)
@@ -414,7 +481,7 @@ ${inputText.slice(0, 3000)}`
     })
     const data = await res.json()
     const raw = data.content?.find((c: any) => c.type === 'text')?.text || ''
-    return JSON.parse(raw.replace(/```json|```/g, '').trim())
+    return extractJsonObj(raw)
   }
 
   // JSONパースしない生テキスト版（インタビュー記事などmarkdown出力用）
@@ -629,23 +696,28 @@ ${text}`
         ? `\n\n【過去の企画履歴（被りを避けてください）】\n${history.flatMap((h: any) => h.plans || []).map((p: any) => `・${p.title}`).join('\n')}`
         : ''
       const result = await callClaude(
-`あなたはSAMURAI ARCHITECTSの企画担当AIです。
-渡された資料・データから外部発信すべきテーマを抽出します。${pastNgForPlanning}
+personaBlock() +
+`あなたはSAMURAI ARCHITECTSの企画担当AIです。上記「加藤ライター人格ブリーフ」の思想・文体・ガードレールに必ず従い、加藤利基本人が「自分の名前でぜひ発信したい」と思える企画だけを設計します。${pastNgForPlanning}
 
-【加藤CEOの発信テーマ軸（必ず反映すること）】
-- 建築業界はまだ「ポケベル」の時代。ポケベル→ガラケー→スマホという段階で、今はガラケーとスマホが混在する過渡期
-- バックキャスト設計：イメージ→図面→建材という逆算型の設計プロセスへの移行
-- 中小工務店・設計事務所の「味方になりたい」。家業が建設業で、そこへの課題感から起業
-- システムだけでは業界は変わらない。ワークフロー・人材育成・ブランディングまで含めた伴走が必要
-- 空間デザインの民主化：専門家でなくても高品質な設計提案ができる世界を作る
-- カタチ（建築）× 施策（経営）の二項融合。ハードとソフト、両方の視点を持つ
-- 変革の受け入れは半分程度。「どっちの意見も分かる」という姿勢で語る
+【最重要：加藤オーサーシップ（自分の名前で出したいか）】
+発信の思想・文体・ガードレールはブリーフに従う（比喩は冒頭の"入口の一言"に留め、軸やタイトルにしない）。
+各企画は、加藤本人が読んで「これは自分の名前でぜひ出したい」と思えるかを最優先に設計し、次の6点で自己採点する：
+1. 一人称の原体験・動機が切り口か（家業=工務店、現場の課題感から起業、カタチ×施策）
+2. 加藤固有の視点か（汎用ビジネス記事になっていないか）
+3. 業界への敬意・両論を認める姿勢か（断罪していないか）
+4. 比喩に逃げず本質（伴走／バックキャスト／建築家の役割再定義）に踏み込んでいるか
+5. 嘘・最大値の誇張がなく、自分の言葉として成立するか
+6. 「よく言ってくれた」と同業・読者が思う固有の踏み込みがあるか
+
+【読者を動かす設計】
+- 読者の「切実な問い」を背骨にする（誰のどの痛みか）。
+- 読後に読者が「SAMURAI／加藤なら分かってくれる、相談したい・使ってみたい」と思う"信頼の作られ方"を必ず設計する（売り込み・CTAではなく、深い理解の証明で）。
 
 【ターゲットペルソナと態度】
 以下の3ペルソナ × 7態度のどのマスに向けた企画かを必ず明示すること。
 
 ペルソナ：
-・中小工務店経営者：現場優先、デジタル苦手意識あり、即効性・コスト重視
+・中小工務店経営者：中堅・30〜40代で事業承継/世代交代の渦中。深層心理＝取り残される怖さ×自分にもできるか半信半疑。デジタルに無縁ではなくnote/NewsPicks等に触れる。売り込みを嫌い、相談できる相手を求める
 ・設計事務所経営者：クリエイティブ重視、品質意識高、新技術への好奇心あり
 ・大手ディベロッパーDX担当者：組織的意思決定、ROI・スケール重視
 
@@ -714,7 +786,7 @@ NG表現が企画タイトル・切り口・核心に含まれていないこと
 ・記事目次は大見出し＋小見出しの2階層・10章以内
 ・企画の方向性（切り口・核心）と構成（ニーズ・ゴール・目次）が一貫するように生成すること
 
-JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心","persona":"中小工務店経営者 | 設計事務所経営者 | 大手ディベロッパーDX担当者 のいずれか","stage":"日常 | 課題認知 | きっかけ | 自分事化 | 比較検討 | 商談・アポ | 導入・伴走 のいずれか","ceoAngle":"この企画で使う加藤CEO的な視点・比喩・語り口を1〜2文で","needsManifest":"【顕在ニーズ】箇条書き（・で区切る）","needsLatent":"【潜在ニーズ】箇条書き（・で区切る）","userGoal":"読者が得られる結果（2〜3文）","story":"必要な要素とストーリー（箇条書き3〜5点）","outline":[{"heading":"大見出し","subheadings":["小見出し"]}]}]}`,
+JSONのみ返してください：{"plans":[{"title":"企画タイトル","target":"想定読者","angle":"切り口・視点","point":"伝えたい核心","persona":"中小工務店経営者 | 設計事務所経営者 | 大手ディベロッパーDX担当者 のいずれか","stage":"日常 | 課題認知 | きっかけ | 自分事化 | 比較検討 | 商談・アポ | 導入・伴走 のいずれか","ceoAngle":"この企画で使う加藤CEO的な視点・比喩・語り口を1〜2文で","authorReason":"なぜ加藤がこれを語る必然があるか（使う実体験・原体験）を1〜2文で","readerQuestion":"読者の切実な問い（読者自身の言葉・一文で）","readerChange":"読後に読者がどう変わるか（1〜2文）","trustPath":"なぜ読者がSAMURAI／加藤に相談・利用したくなるか＝信頼の作られ方（1〜2文・売り込みでなく深い理解の証明で）","lead":"記事の書き出し案2〜3文（加藤の一人称・声で。読めば本人の声か判断できるもの）","authorScore":"0〜100の整数（上記6基準の総合＝加藤が自分の名前で出したい度）","authorNotes":"加藤が出したい理由 / 懸念を1〜2文で","needsManifest":"【顕在ニーズ】箇条書き（・で区切る）","needsLatent":"【潜在ニーズ】箇条書き（・で区切る）","userGoal":"読者が得られる結果（2〜3文）","story":"必要な要素とストーリー（箇条書き3〜5点）","outline":[{"heading":"大見出し","subheadings":["小見出し"]}]}]}`,
         `以下の情報から発信企画を${planCount}つ考えてください。${pastPlans}
 
 【今回の入力資料】
@@ -751,6 +823,13 @@ ${sanitizedCompetitive}` : ''}`
     needsLatent: safeText(p?.needsLatent),
     userGoal: safeText(p?.userGoal),
     story: safeText(p?.story),
+    authorReason: safeText(p?.authorReason),
+    readerQuestion: safeText(p?.readerQuestion),
+    readerChange: safeText(p?.readerChange),
+    trustPath: safeText(p?.trustPath),
+    lead: safeText(p?.lead),
+    authorScore: typeof p?.authorScore === 'number' ? p.authorScore : (parseInt(String(p?.authorScore)) || 0),
+    authorNotes: safeText(p?.authorNotes),
     outline: safeArr(p?.outline).map((o: any) =>
       typeof o === 'string'
         ? { heading: o, subheadings: [] as string[] }
@@ -1212,18 +1291,29 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
               const hasStruct = manifest.length > 0 || latent.length > 0 || !!goal || storyBullets.length > 0 || outline.length > 0
               return (
               <div key={i} onClick={() => setSelectedPlanIndices(prev => { const s = new Set(prev); s.has(i) ? s.delete(i) : s.add(i); return s })}
-                style={{ background: selectedPlanIndices.has(i) ? 'var(--gbg)' : 'var(--bg)', borderRadius: 'var(--r)', padding: 12, marginBottom: 8, cursor: 'pointer', border: selectedPlanIndices.has(i) ? '1px solid var(--green)' : '1px solid transparent' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <div style={{ width: 16, height: 16, borderRadius: 3, border: '1.5px solid var(--b1)', background: selectedPlanIndices.has(i) ? 'var(--green)' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {selectedPlanIndices.has(i) && <span style={{ color: 'white', fontSize: 10, fontWeight: 700 }}>✓</span>}
+                style={{ background: selectedPlanIndices.has(i) ? 'var(--gbg)' : 'var(--bg)', borderRadius: 'var(--r)', padding: 16, marginBottom: 10, cursor: 'pointer', border: selectedPlanIndices.has(i) ? '1px solid var(--green)' : '1px solid var(--b1)' }}>
+                {/* タイトル＝判断の主役。大きく・濃く。 */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 4, border: '1.5px solid var(--b1)', background: selectedPlanIndices.has(i) ? 'var(--green)' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                    {selectedPlanIndices.has(i) && <span style={{ color: 'white', fontSize: 12, fontWeight: 700 }}>✓</span>}
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>企画{i+1}: {safeText(p.title)}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 3 }}>企画{i+1}</div>
+                    <div style={{ fontSize: 19, fontWeight: 800, color: 'var(--ink)', lineHeight: 1.4 }}>{safeText(p.title)}</div>
+                  </div>
                 </div>
+                {/* 伝えたい核心＝要約。全幅で大きく見せる。 */}
+                {safeText(p.point) && (
+                  <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', marginBottom: 4 }}>伝えたい核心</div>
+                    <div style={{ fontSize: 14, color: 'var(--ink)', lineHeight: 1.75 }}>{safeText(p.point)}</div>
+                  </div>
+                )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                  {[['想定読者', p.target], ['切り口', p.angle], ['伝えたい核心', p.point]].map(([label, val]) => (
+                  {[['想定読者', p.target], ['切り口', p.angle]].map(([label, val]) => (
                     <div key={label}>
                       <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
-                      <div style={{ fontSize: 12, color: 'var(--ink2)' }}>{val}</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.6 }}>{val}</div>
                     </div>
                   ))}
                 </div>
@@ -1232,6 +1322,24 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
                     {p.persona && <div style={{ fontSize: 11 }}><span style={{ fontWeight: 600, color: 'var(--muted)' }}>ペルソナ：</span><span style={{ color: 'var(--ink2)' }}>{p.persona}</span></div>}
                     {p.stage && <div style={{ fontSize: 11 }}><span style={{ fontWeight: 600, color: 'var(--muted)' }}>フェーズ：</span><span style={{ color: 'var(--ink2)' }}>{p.stage}</span></div>}
                     {p.ceoAngle && <div style={{ fontSize: 11 }}><span style={{ fontWeight: 600, color: 'var(--muted)' }}>加藤CEO視点：</span><span style={{ color: 'var(--ink2)' }}>{p.ceoAngle}</span></div>}
+                  </div>
+                )}
+                {(p.lead || p.authorReason || p.readerQuestion || p.trustPath || (p.authorScore ?? 0) > 0) && (
+                  <div onClick={e => e.stopPropagation()} style={{ marginTop: 8, paddingTop: 8, borderTop: '0.5px solid var(--b1)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)' }}>🖋 加藤オーサーシップ</span>
+                      {(p.authorScore ?? 0) > 0 && <span style={{ fontSize: 13, fontWeight: 800, color: (p.authorScore ?? 0) >= 80 ? 'var(--green)' : (p.authorScore ?? 0) >= 60 ? '#d97706' : 'var(--red)' }}>{p.authorScore}<span style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 500 }}> /100 出したい度</span></span>}
+                    </div>
+                    {p.lead && <div style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 6, padding: '8px 10px', marginBottom: 6 }}><div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', marginBottom: 2 }}>書き出し案（加藤の声）</div><div style={{ fontSize: 12, color: 'var(--ink)', lineHeight: 1.7 }}>{p.lead}</div></div>}
+                    {([['なぜ加藤が語るか', p.authorReason], ['読者の切実な問い', p.readerQuestion], ['読後の変化', p.readerChange], ['相談したくなる理由', p.trustPath], ['出したい理由/懸念', p.authorNotes]] as [string, string | undefined][]).filter(([, v]) => v).map(([label, val]) => (
+                      <div key={label} style={{ marginBottom: 3 }}><span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)' }}>{label}：</span><span style={{ fontSize: 12, color: 'var(--ink2)' }}>{val}</span></div>
+                    ))}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                      {([['publish', '✅ 出したい', 'var(--green)', 'var(--gbg)'], ['revise', '✏️ 直したい', '#d97706', '#fffbeb'], ['reject', '✖️ 却下', 'var(--red)', 'var(--rbg)']] as const).map(([v, label, col, bg]) => (
+                        <button key={v} onClick={() => saveDecision(i, v, p)} style={{ fontSize: 11, padding: '4px 12px', borderRadius: 14, border: '0.5px solid ' + (verdicts[i] === v ? col : 'var(--b1)'), background: verdicts[i] === v ? bg : 'none', color: verdicts[i] === v ? col : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: verdicts[i] === v ? 700 : 500 }}>{label}</button>
+                      ))}
+                      {verdicts[i] && <span style={{ fontSize: 10, color: 'var(--green)' }}>✓ 記録しました</span>}
+                    </div>
                   </div>
                 )}
                 {hasStruct && (

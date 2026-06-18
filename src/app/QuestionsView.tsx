@@ -11,6 +11,7 @@ interface Question {
   status: 'open' | 'answered'
   answer: string
   createdAt: string
+  source?: string
 }
 
 interface Members { samurai: string[]; molts: string[] }
@@ -152,6 +153,7 @@ export default function QuestionsView({ members }: Props) {
                   <span style={{ fontSize: 13, fontWeight: 500, cursor: 'pointer' }} onClick={() => openEdit(q)}>{q.content}</span>
                 </div>
                 <div className="im">
+                  {q.source === 'task' && <span style={{ fontSize: 9, background: '#fef9c3', color: '#854d0e', padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>📋 タスク由来</span>}
                   {q.taskName && <span className="stag">{q.taskName}</span>}
                   {q.deadline && <span style={{ fontSize: 10, fontWeight: 500, color: 'var(--muted)' }}>期日: {q.deadline}</span>}
                   <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 10, fontWeight: 600, background: q.status === 'answered' ? 'var(--gbg)' : 'var(--rbg)', color: q.status === 'answered' ? 'var(--green)' : 'var(--red)' }}>

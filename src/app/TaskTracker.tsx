@@ -16,6 +16,7 @@ interface Props {
   onBulkStatusChange: (names: string[], st: string) => void
   onOpenModal: (task: Task | null) => void
   onDelete: (task: Task) => void
+  onRegisterQuestion: (task: Task) => void
 }
 
 const statusLabel: Record<TaskStatus, string> = {
@@ -45,8 +46,11 @@ const deadlineGroupLabel: Record<DeadlineGroup, string> = {
   '期限切れ': '📛 期限切れ', '今日': '📅 今日', '今週': '📅 今週', '来週': '📅 来週', 'それ以降': '📅 それ以降', '期日なし': '📋 期日なし'
 }
 
-export default function TaskTracker({ tasks, members, onStatusChange, onBulkStatusChange, onOpenModal, onDelete }: Props) {
+export default function TaskTracker({ tasks, members, onStatusChange, onBulkStatusChange, onOpenModal, onDelete, onRegisterQuestion }: Props) {
   const confirmDelete = (t: Task) => { if (window.confirm(`このタスクを削除しますか？\n「${t.name}」`)) onDelete(t) }
+  const confirmRegisterQuestion = (t: Task) => {
+    if (window.confirm(`このタスクを質問シートに登録しますか？\n「${t.name}」\n\n（回答者・期日はあとで質問シートで調整できます）`)) onRegisterQuestion(t)
+  }
   // 複数選択フィルター（空集合 = すべて）。ステータスは空集合のとき完了(done)を除外
   const [filterStatus, setFilterStatus] = useState<Set<string>>(new Set())
   const [filterAssignee, setFilterAssignee] = useState<Set<string>>(new Set())
@@ -177,6 +181,7 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
             {t.src === 'slack' && <span style={{ fontSize: 9, background: '#eff6ff', color: '#1d4ed8', padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>Slack</span>}
             {t.src && t.src !== 'slack' && <span style={{ fontSize: 9, background: '#fef9c3', color: '#854d0e', padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>📋 {t.src.replace(/^\d{4}-\d{2}-\d{2}\s*/, '')}</span>}
             {t.st === 'thread-review' && t.threadUrl && <a href={t.threadUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 9, background: '#f5f3ff', color: '#6d28d9', padding: '1px 6px', borderRadius: 3, fontWeight: 600, textDecoration: 'none' }}>🔗 スレッドを開く</a>}
+            {t.linkedQuestionId && <span style={{ fontSize: 9, background: '#fef9c3', color: '#854d0e', padding: '1px 6px', borderRadius: 3, fontWeight: 600 }}>❓ 質問シート登録済み</span>}
           </div>
           {t.impact && <div className="id">{t.impact}</div>}
           {t.背景 && (
@@ -193,6 +198,9 @@ export default function TaskTracker({ tasks, members, onStatusChange, onBulkStat
             <option key={val} value={val}>{lbl}</option>
           ))}
         </select>
+        {!t.linkedQuestionId && (
+          <button onClick={() => confirmRegisterQuestion(t)} title="質問シートに登録" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '2px 4px', color: 'var(--muted)', flexShrink: 0 }}>❓</button>
+        )}
         <button onClick={() => confirmDelete(t)} title="削除" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '2px 4px', color: 'var(--muted)', flexShrink: 0 }}>🗑</button>
       </div>
     )

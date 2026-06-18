@@ -13,6 +13,23 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true })
 }
 
+// 単一の質問を追記/更新する（全配列を持たないタスク側からの「質問化」用）。
+// 同じ id が既にあれば更新（重複登録の防止）、なければ末尾に追加。
+export async function PUT(req: Request) {
+  try {
+    const q = await req.json()
+    if (!q || !q.id) return NextResponse.json({ error: 'question with id required' }, { status: 400 })
+    const existing = (await redis.get<any[]>('samurai:questions')) || []
+    const list = Array.isArray(existing) ? existing : []
+    const exists = list.some(x => x?.id === q.id)
+    const updated = exists ? list.map(x => (x?.id === q.id ? { ...x, ...q } : x)) : [...list, q]
+    await redis.set('samurai:questions', updated)
+    return NextResponse.json({ ok: true, created: !exists })
+  } catch (error) {
+    return NextResponse.json({ error: String(error) }, { status: 500 })
+  }
+}
+
 // 単一の質問のステータス等を更新。回答済みになったら、linkedQuestionId が一致するタスクを done にする
 export async function PATCH(req: Request) {
   try {
