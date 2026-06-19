@@ -169,6 +169,10 @@ export default function ContentGen() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [history, setHistory] = useState<any[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  // 保存済み記事を提案モードで開く（phase1.5）
+  const [showSaved, setShowSaved] = useState(false)
+  const [savedArticles, setSavedArticles] = useState<any[]>([])
+  const [savedLoading, setSavedLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState('')
   const [copiedDocIdx, setCopiedDocIdx] = useState<number | null>(null)
@@ -206,6 +210,62 @@ export default function ContentGen() {
   const pickReviewer = (name: string) => {
     setReviewerName(name)
     try { localStorage.setItem('samurai:reviewer-name', name) } catch {}
+  }
+
+  // 保存済み記事（content-writings）を articleId 付きでフラットに取得
+  const fetchSavedArticles = async () => {
+    setSavedLoading(true)
+    try {
+      const res = await fetch('/api/content-writings')
+      const data = await res.json()
+      const items: any[] = []
+      if (Array.isArray(data)) {
+        data.forEach((entry: any) => {
+          ;(entry?.results || []).forEach((res2: any) => {
+            if (res2 && res2.articleId && res2.content && (res2.content.noteBody || '').trim()) {
+              items.push({
+                articleId: res2.articleId,
+                date: entry.date || '',
+                version: entry.version || '',
+                fileNames: entry.fileNames || [],
+                title: res2.content.noteTitle || res2.plan?.title || '(無題)',
+                plan: res2.plan || {},
+                content: res2.content,
+              })
+            }
+          })
+        })
+      }
+      setSavedArticles(items)
+    } catch {}
+    setSavedLoading(false)
+  }
+
+  // 保存済み記事を done ステップの提案モードUIに読み込む（生成直後と同じ画面が動く）
+  const openSavedArticle = (item: any) => {
+    const plan: any = {
+      ...(item.plan && typeof item.plan === 'object' ? item.plan : {}),
+      title: item.plan?.title || item.title || '',
+      direction: item.plan?.direction || '',
+      target: item.plan?.target || '',
+      angle: item.plan?.angle || '',
+      okExpressions: Array.isArray(item.plan?.okExpressions) ? item.plan.okExpressions : [],
+      ngExpressions: Array.isArray(item.plan?.ngExpressions) ? item.plan.ngExpressions : [],
+      expressions: Array.isArray(item.plan?.expressions) ? item.plan.expressions : [],
+    }
+    const content = {
+      xPosts: Array.isArray(item.content?.xPosts) ? item.content.xPosts : [],
+      noteTitle: item.content?.noteTitle || '',
+      noteOutline: item.content?.noteOutline || '',
+      noteBody: item.content?.noteBody || '',
+    }
+    setResults([{ plan, content, articleId: item.articleId }])
+    setSelectedResult(0)
+    setWritingMode('both')
+    setWritingTab('note')
+    setPreviewApproved(false)
+    setShowSaved(false)
+    setStep('done')
   }
 
   const copyDoc = async (idx: number, doc: string) => {
@@ -1116,9 +1176,14 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
     <div style={{ maxWidth: 820 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
         <div className="pg-title">発信コンテンツ生成</div>
-        <button onClick={() => { setShowHistory(!showHistory); fetchHistory() }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
-          {showHistory ? '← 生成に戻る' : '📚 過去の企画履歴'}
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => { const next = !showSaved; setShowSaved(next); setShowHistory(false); if (next) fetchSavedArticles() }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: showSaved ? 'var(--ink)' : 'none', color: showSaved ? '#fff' : 'var(--ink2)', cursor: 'pointer', fontFamily: 'inherit' }}>
+            {showSaved ? '← 生成に戻る' : '📂 保存記事を提案モードで開く'}
+          </button>
+          <button onClick={() => { setShowHistory(!showHistory); setShowSaved(false); fetchHistory() }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+            {showHistory ? '← 生成に戻る' : '📚 過去の企画履歴'}
+          </button>
+        </div>
       </div>
       <div className="pg-sub">企画・構成 → 編集 → 執筆の3エージェントがMTGから発信コンテンツを自動生成します</div>
 
@@ -1175,7 +1240,32 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
         </div>
       )}
 
-      {!showHistory && <>
+      {/* 保存記事を提案モードで開く（phase1.5） */}
+      {showSaved && (
+        <div>
+          <div className="pg-sub" style={{ marginBottom: 12 }}>保存済みの記事を1件選んで提案モードで開きます。生成し直さずに、別の人が後から提案・承認できます。</div>
+          {savedLoading ? (
+            <div style={{ padding: 20, color: 'var(--muted)', fontSize: 12 }}>読み込み中...</div>
+          ) : savedArticles.length === 0 ? (
+            <div style={{ padding: 20, color: 'var(--muted)', fontSize: 12 }}>note本文のある保存記事がありません</div>
+          ) : (
+            savedArticles.map((item: any, i: number) => (
+              <div key={item.articleId || i} onClick={() => openSavedArticle(item)}
+                style={{ background: 'var(--paper)', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', padding: 14, marginBottom: 8, cursor: 'pointer' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{item.title}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
+                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>{item.date}</span>
+                  {item.version === 'approved' && <span style={{ fontSize: 10, color: 'var(--green)', background: 'var(--gbg)', borderRadius: 10, padding: '1px 8px' }}>確定版</span>}
+                  {item.fileNames?.length > 0 && <span style={{ fontSize: 10, color: 'var(--muted)' }}>{item.fileNames.join(', ')}</span>}
+                  <span style={{ fontSize: 10, color: 'var(--ink2)' }}>→ 提案モードで開く</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {!showHistory && !showSaved && <>
       {/* 生成モード切り替え（既存モードと排他） */}
       {step === 'input' && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
@@ -1581,6 +1671,7 @@ JSONのみ返してください：{"results":[{"xPosts":["X投稿1(140文字以�
             <button onClick={() => { const t = writingMode==='note'&&results[selectedResult]?.content?.noteTitle||'発信コンテンツ一式'; exportPDF(t, writingSections(results, writingMode)) }} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📄 PDF出力</button>
             <button onClick={() => { const t = writingMode==='note'&&results[selectedResult]?.content?.noteTitle||'発信コンテンツ一式'; exportWord(t, writingSections(results, writingMode)) }} style={{ padding: '6px 12px', border: '0.5px solid var(--b1)', borderRadius: 'var(--r)', background: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 11 }}>📝 Word出力</button>
             <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => { setStep('input'); setResults([]); setShowSaved(true); fetchSavedArticles() }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>📂 保存記事一覧へ</button>
             <button onClick={() => { setStep('input'); setPlans([]); setEditedPlans([]); setResults([]); setText('') }} style={{ fontSize: 11, padding: '4px 12px', border: '0.5px solid var(--b1)', borderRadius: 20, background: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>最初からやり直す</button>
           </div>
           </div>
