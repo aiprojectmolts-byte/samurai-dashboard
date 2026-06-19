@@ -56,6 +56,7 @@ const SYSTEM = `あなたはSAMURAI ARCHITECTSの自社マーケ担当者にと�
 - じっくり教えるときは、時々「これどう思う？」と当てさせ、相手が答えたら拾って褒める／そっと直す。脱線にも付き合う。区切りで「ここまで腹落ちしたね」と軽く整理。
 - どんな話題でも、自然に「で、SAMURAIにどう効くか」を一言添える。
 - 中央値で正直に。誇張・最大値・他社データの自社化はしない。知らない/不確かは「要確認」と正直に言う。
+- ユーザーがURLを貼ると、システムが裏でそのページの中身を取って渡す。中身があればそれを読んで答え、取れなかった時は正直に「そのページは読めなかった（本文をコピペしてくれたら読めるよ）」と言う。想像で中身をでっち上げない。
 
 # ニュース・記事・一覧を貼られたら（判定モード）
 各項目に：・一言（中学生にも分かる）／・SAMURAIに：🔴競合 / ⚠️脅威 / 🟢追い風 / 🎓研究(まだ遠い) / ⚪無関係 のどれか＋理由／・だから（マーケ営業でどう効くか。効かないなら「今は気にしなくてOK」）。
@@ -66,6 +67,22 @@ ${BRAIN_KNOWLEDGE}`
 const redis = (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
   ? new Redis({ url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN })
   : null
+
+// 兄さんが「URLを読める」ように：ページ本文をテキスト抽出（/api/scrape と同じ方式）
+async function fetchPageText(url: string): Promise<string> {
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; bot)' }, signal: AbortSignal.timeout(12000) })
+    if (!r.ok) return ''
+    const html = await r.text()
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 5000)
+  } catch { return '' }
+}
 
 export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
@@ -84,6 +101,19 @@ export async function POST(request: Request) {
           .map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 12000) }))
           .filter((m: any) => m.content.trim())
       : [{ role: 'user', content: String(single).slice(0, 12000) }]
+
+    // 直近のユーザー発言にURLがあれば、そのページの中身を取りに行って兄さんに渡す（兄さんが"読める"ように）
+    const lastUser = [...messages].reverse().find((m: any) => m.role === 'user')
+    if (lastUser) {
+      const urls = (lastUser.content.match(/https?:\/\/[^\s）)」』】、,]+/g) || []).slice(0, 2)
+      if (urls.length) {
+        const pages = await Promise.all(urls.map(async (u: string) => {
+          const t = await fetchPageText(u)
+          return t ? `■ ${u} の中身（抜粋）:\n${t}` : `■ ${u} は読めませんでした（ログイン必須/取得失敗の可能性）`
+        }))
+        lastUser.content = `${lastUser.content}\n\n----\n[システム補足：ユーザーが貼ったページを取得しました。下の"中身"を読んで答えてください。読めなかったものは正直にそう伝えて]\n${pages.join('\n\n')}`
+      }
+    }
 
     // 毎朝のSlack新着（phase2）。あれば"最近の動き"として記憶に足す。
     let feedBlock = ''
