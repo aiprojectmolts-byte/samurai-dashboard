@@ -1,6 +1,7 @@
 import { Redis } from '@upstash/redis'
 import { NextResponse } from 'next/server'
-import { fetchTrendItemsFlat } from '@/lib/sources'
+import { fetchTrendItemsFlat, fetchKeywordNews } from '@/lib/sources'
+import { WATCH } from '@/lib/watch'
 
 // ===== キャッチアップくん（子）=====
 // 毎朝Web（建築・AI・競合ニュース）を拾い → 新着だけ → AIが「一言／自社への判定／だから」を付けて
@@ -38,7 +39,13 @@ export async function GET(request: Request) {
   const limit = Math.min(12, Math.max(1, Number(url.searchParams.get('limit')) || 8))
 
   try {
-    const items = await fetchTrendItemsFlat(3)
+    // 通常の業界ニュース＋ウォッチ中の人/企業のニュースを合わせて拾う
+    const [base, watchGroups] = await Promise.all([
+      fetchTrendItemsFlat(3),
+      Promise.all(WATCH.filter(w => w.news).map(w => fetchKeywordNews(w.news, 2))),
+    ])
+    const watchItems = watchGroups.flatMap(g => g.items.filter(i => i.title).map(i => ({ ...i, keyword: g.keyword })))
+    const items = [...base, ...watchItems]
     const seen: string[] = ((await redis.get(SEEN)) as string[]) || []
     const seenSet = new Set(seen.map(norm))
 

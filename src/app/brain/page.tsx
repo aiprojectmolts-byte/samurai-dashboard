@@ -41,6 +41,7 @@ export default function BrainPage() {
   const [loading, setLoading] = useState(false)
   const [showList, setShowList] = useState(false)
   const [feed, setFeed] = useState<any[]>([])
+  const [watch, setWatch] = useState<any[]>([])
   const [catching, setCatching] = useState(false)
   const taRef = useRef<HTMLTextAreaElement>(null)
 
@@ -54,8 +55,13 @@ export default function BrainPage() {
       if (savedId && list.some(c => c.id === savedId)) setCurrentId(savedId)
     } catch { /* noop */ }
     loadFeed()
+    loadWatch()
     taRef.current?.focus()
   }, [])
+
+  const loadWatch = async () => {
+    try { const r = await fetch('/api/brain-watch'); const d = await r.json(); setWatch(Array.isArray(d.watch) ? d.watch : []) } catch { /* noop */ }
+  }
 
   // 開いている会話を記憶（ハードリロードで消えないように）
   useEffect(() => { try { localStorage.setItem('brain_current', currentId) } catch { /* noop */ } }, [currentId])
@@ -220,6 +226,30 @@ export default function BrainPage() {
                 {catching ? '拾ってます…' : '🔄 今すぐ拾う'}
               </button>
             </div>
+            {watch.length > 0 && (
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: '#3f3f3f', marginBottom: 8 }}>👤 ウォッチ中（業界を動かす人・メディア／検証済み）</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {watch.map((w, i) => (
+                    <div key={i} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.08)', borderRadius: 8, padding: '9px 12px' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{w.name}</div>
+                      <div style={{ fontSize: 11.5, color: '#6b6b6b', marginTop: 2, lineHeight: 1.45 }}>{w.role}</div>
+                      <div style={{ fontSize: 11.5, color: '#5a5a5a', marginTop: 3, lineHeight: 1.45 }}>→ {w.why}</div>
+                      {Array.isArray(w.links) && w.links.length > 0 && (
+                        <div style={{ marginTop: 5, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                          {w.links.map((l: any, j: number) => (
+                            <a key={j} href={l.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: '#7a8cff' }}>{l.label} ↗</a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: '#a9a9a9', marginTop: 8, lineHeight: 1.5 }}>※ 日々の投稿は上のリンクから手動フォロー（X等は自動取得できないため）。ニュースでの言及は下の新着に自動で出ます。</div>
+              </div>
+            )}
+
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: '#3f3f3f', marginBottom: 8 }}>📰 新着ニュース</div>
             {feed.length === 0 ? (
               <div style={{ fontSize: 13, color: '#9a9a9a', padding: '14px 0', lineHeight: 1.6 }}>まだ新着はありません。「今すぐ拾う」で最新ニュースを集めます。</div>
             ) : (
