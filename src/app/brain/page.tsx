@@ -50,6 +50,8 @@ export default function BrainPage() {
   const [cards, setCards] = useState<any[]>([])
   const [cmdkOpen, setCmdkOpen] = useState(false)
   const [cmdkQuery, setCmdkQuery] = useState('')
+  const [sel, setSel] = useState<{ text: string; x: number; y: number } | null>(null)
+  const [term, setTerm] = useState<{ q: string; a: string; loading: boolean } | null>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -79,6 +81,21 @@ export default function BrainPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // 文章を選択したら「🧠 これ何？」を出す（どのタブの内容でも・新しい語でも対応）
+  useEffect(() => {
+    const onUp = () => setTimeout(() => {
+      const s = window.getSelection()
+      const t = s?.toString().trim() || ''
+      if (term) return
+      if (t.length >= 1 && t.length <= 80) {
+        try { const r = s!.getRangeAt(0).getBoundingClientRect(); setSel({ text: t, x: Math.max(8, Math.min(r.left, window.innerWidth - 120)), y: r.bottom }) } catch { setSel(null) }
+      } else setSel(null)
+    }, 10)
+    document.addEventListener('mouseup', onUp)
+    document.addEventListener('touchend', onUp)
+    return () => { document.removeEventListener('mouseup', onUp); document.removeEventListener('touchend', onUp) }
+  }, [term])
 
   // キャッチアップを開いたら「ここまで見た」を記録（次回の"新着"判定に使う）
   useEffect(() => { if (tab === 'catch') { try { localStorage.setItem('brain_catch_lastseen', String(Date.now())) } catch { /* noop */ } } }, [tab])
@@ -140,6 +157,21 @@ export default function BrainPage() {
   const FOLLOWUPS = ['根拠と出典は？', '競合はどう動いてる？', 'うちのLP・コンテンツに落とすと？']
   const copyText = (t: string) => { try { navigator.clipboard?.writeText(t) } catch { /* noop */ } }
   const makeContent = () => ask('今の回答を、SAMURAI向けに加藤さんの正直な文体でコンテンツの下書き（フック1行＋骨子）にして')
+
+  // 選択した語句を、その場で平易に解説
+  const explainTerm = async () => {
+    if (!sel) return
+    const q = sel.text
+    setTerm({ q, a: '', loading: true })
+    setSel(null)
+    try {
+      const r = await fetch('/api/brain-term', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ term: q }) })
+      const d = await r.json()
+      setTerm({ q, a: d.text || d.error || '（取得できませんでした）', loading: false })
+    } catch (e: any) {
+      setTerm({ q, a: 'エラー：' + String(e), loading: false })
+    }
+  }
 
   // Cmd-K のコマンド一覧（先頭が Enter で実行される）
   const cmds: { label: string; run: () => void }[] = (() => {
@@ -477,6 +509,29 @@ export default function BrainPage() {
                   <div style={{ fontSize: 12, color: '#c0392b', marginTop: 10, lineHeight: 1.55, display: 'flex', gap: 6 }}><span style={{ flexShrink: 0 }}>🚫</span><span><b style={{ fontWeight: 600 }}>言ってはいけない：</b>{b.landmine}</span></div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {sel && !term && (
+          <button onMouseDown={e => e.preventDefault()} onClick={explainTerm}
+            style={{ position: 'fixed', left: sel.x, top: sel.y + 6, zIndex: 60, fontSize: 12, fontWeight: 600, padding: '5px 11px', background: '#0f0f0f', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: "'Inter','Noto Sans JP',sans-serif", boxShadow: '0 2px 10px rgba(0,0,0,0.28)' }}>🧠 これ何？</button>
+        )}
+
+        {term && (
+          <div onClick={() => setTerm(null)} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.12)' }}>
+            <div onClick={e => e.stopPropagation()} style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', width: 'min(420px, 92vw)', background: '#fff', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.22)', padding: '14px 16px', fontFamily: "'Inter','Noto Sans JP',sans-serif" }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6, gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🧠 {term.q}</span>
+                <span onClick={() => setTerm(null)} style={{ fontSize: 17, color: '#9a9a9a', cursor: 'pointer', lineHeight: 1, flexShrink: 0 }}>×</span>
+              </div>
+              <div style={{ fontSize: 13.5, lineHeight: 1.7, color: '#1f1f1f' }}>
+                {term.loading ? <span style={{ color: '#9a9a9a' }}>🧠 調べてます…</span> : <div dangerouslySetInnerHTML={{ __html: format(term.a) }} />}
+              </div>
+              {!term.loading && (
+                <div onClick={() => { setTab('ani'); setInput(`「${term.q}」をもっと詳しく教えて`); setTerm(null); setTimeout(() => taRef.current?.focus(), 60) }}
+                  style={{ fontSize: 11.5, color: '#7a8cff', cursor: 'pointer', marginTop: 10 }}>→ 兄さんにもっと詳しく聞く</div>
+              )}
             </div>
           </div>
         )}
