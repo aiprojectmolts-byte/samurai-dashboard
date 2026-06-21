@@ -42,6 +42,7 @@ export default function BrainPage() {
   const [showList, setShowList] = useState(false)
   const [feed, setFeed] = useState<any[]>([])
   const [watch, setWatch] = useState<any[]>([])
+  const [brief, setBrief] = useState<any>(null)
   const [catching, setCatching] = useState(false)
   const taRef = useRef<HTMLTextAreaElement>(null)
 
@@ -56,11 +57,15 @@ export default function BrainPage() {
     } catch { /* noop */ }
     loadFeed()
     loadWatch()
+    loadBrief()
     taRef.current?.focus()
   }, [])
 
   const loadWatch = async () => {
     try { const r = await fetch('/api/brain-watch'); const d = await r.json(); setWatch(Array.isArray(d.watch) ? d.watch : []) } catch { /* noop */ }
+  }
+  const loadBrief = async () => {
+    try { const r = await fetch('/api/brain-brief'); const d = await r.json(); setBrief(d.brief || null) } catch { /* noop */ }
   }
 
   // 開いている会話を記憶（ハードリロードで消えないように）
@@ -138,6 +143,15 @@ export default function BrainPage() {
 
         {tab === 'ani' && (
           <>
+            {brief?.focus && (
+              <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: '12px 14px', marginBottom: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#3f3f3f', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span>📌 今のフォーカス</span>
+                  <span style={{ fontWeight: 400, color: '#a9a9a9', fontSize: 10.5 }}>{(brief.updatedAt || '').slice(0, 10)} 更新</span>
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.7, color: '#1f1f1f' }} dangerouslySetInnerHTML={{ __html: format(brief.focus) }} />
+              </div>
+            )}
             <div style={{ fontSize: 12.5, color: '#6b6b6b', marginBottom: 12, lineHeight: 1.6 }}>
               なんでも知ってる"兄さん"。わからん言葉も記事もURLも投げて。サクッとも、じっくりもOK。
             </div>

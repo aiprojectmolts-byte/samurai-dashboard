@@ -122,6 +122,15 @@ export async function POST(request: Request) {
       }
     }
 
+    // 現在のマーケ・ブリーフ（別セッションCCが生成した最新の自社・戦況）。あれば最優先の前提に。
+    let briefBlock = ''
+    try {
+      const brief = redis ? await redis.get<any>('samurai:brain-brief') : null
+      if (brief && brief.text) {
+        briefBlock = `\n\n# 【最重要】現在のマーケ・ブリーフ（最新の自社・市場の状況。これを最優先の前提に答える）\n更新: ${brief.updatedAt || ''}\n${String(brief.text).slice(0, 10000)}`
+      }
+    } catch { /* briefは任意 */ }
+
     // 毎朝のSlack新着（phase2）。あれば"最近の動き"として記憶に足す。
     let feedBlock = ''
     try {
@@ -142,7 +151,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 2000,
-        system: SYSTEM + feedBlock,
+        system: SYSTEM + briefBlock + feedBlock,
         messages,
       }),
     })
