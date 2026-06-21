@@ -110,10 +110,12 @@ export async function POST(request: Request) {
       : [{ role: 'user', content: String(single).slice(0, 12000) }]
 
     // 直近のユーザー発言にURLがあれば、そのページの中身を取りに行って兄さんに渡す（兄さんが"読める"ように）
+    let sources: string[] = []
     const lastUser = [...messages].reverse().find((m: any) => m.role === 'user')
     if (lastUser) {
       const urls = (lastUser.content.match(/https?:\/\/[^\s）)」』】、,]+/g) || []).slice(0, 2)
       if (urls.length) {
+        sources = urls
         const pages = await Promise.all(urls.map(async (u: string) => {
           const t = await fetchPageText(u)
           return t ? `■ ${u} の中身（抜粋）:\n${t}` : `■ ${u} は読めませんでした（ログイン必須/取得失敗の可能性）`
@@ -161,7 +163,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Anthropic error ${res.status}`, detail: data }, { status: 500 })
     }
     const answer = data.content?.[0]?.text || '（回答を取得できませんでした）'
-    return NextResponse.json({ answer })
+    return NextResponse.json({ answer, sources })
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 })
   }

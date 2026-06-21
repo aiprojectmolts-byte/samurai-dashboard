@@ -11,7 +11,7 @@ const EXAMPLES = [
 ]
 const LS_KEY = 'brain_convos'
 
-type QA = { q: string; a: string; loading?: boolean; error?: string }
+type QA = { q: string; a: string; sources?: string[]; loading?: boolean; error?: string }
 type Convo = { id: string; title: string; turns: QA[]; updatedAt: number }
 
 function badgeColor(v: string): string {
@@ -36,7 +36,7 @@ function fmtDate(t: number): string {
 }
 
 export default function BrainPage() {
-  const [tab, setTab] = useState<'today' | 'ani' | 'catch'>('today')
+  const [tab, setTab] = useState<'today' | 'ani' | 'catch' | 'battle'>('today')
   const [input, setInput] = useState('')
   const [convos, setConvos] = useState<Convo[]>([])
   const [currentId, setCurrentId] = useState<string>('')
@@ -47,6 +47,9 @@ export default function BrainPage() {
   const [watch, setWatch] = useState<any[]>([])
   const [catching, setCatching] = useState(false)
   const [newCutoff, setNewCutoff] = useState(0)
+  const [cards, setCards] = useState<any[]>([])
+  const [cmdkOpen, setCmdkOpen] = useState(false)
+  const [cmdkQuery, setCmdkQuery] = useState('')
   const taRef = useRef<HTMLTextAreaElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -63,7 +66,18 @@ export default function BrainPage() {
     } catch { /* noop */ }
     loadFeed()
     loadWatch()
+    loadCards()
     taRef.current?.focus()
+  }, [])
+
+  // Cmd/Ctrl+K でコマンドパレット
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setCmdkOpen(o => !o); setCmdkQuery('') }
+      else if (e.key === 'Escape') setCmdkOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   // キャッチアップを開いたら「ここまで見た」を記録（次回の"新着"判定に使う）
@@ -74,6 +88,9 @@ export default function BrainPage() {
 
   const loadWatch = async () => {
     try { const r = await fetch('/api/brain-watch'); const d = await r.json(); setWatch(Array.isArray(d.watch) ? d.watch : []) } catch { /* noop */ }
+  }
+  const loadCards = async () => {
+    try { const r = await fetch('/api/brain-battlecards'); const d = await r.json(); setCards(Array.isArray(d.cards) ? d.cards : []) } catch { /* noop */ }
   }
 
   // 開いている会話を記憶（ハードリロードで消えないように）
@@ -124,6 +141,21 @@ export default function BrainPage() {
   const copyText = (t: string) => { try { navigator.clipboard?.writeText(t) } catch { /* noop */ } }
   const makeContent = () => ask('今の回答を、SAMURAI向けに加藤さんの正直な文体でコンテンツの下書き（フック1行＋骨子）にして')
 
+  // Cmd-K のコマンド一覧（先頭が Enter で実行される）
+  const cmds: { label: string; run: () => void }[] = (() => {
+    const q = cmdkQuery.trim()
+    const base = [
+      { label: '☀️ 今日へ', run: () => { setTab('today'); setCmdkOpen(false) } },
+      { label: '🧠 兄さんへ', run: () => { setTab('ani'); setCmdkOpen(false) } },
+      { label: '🐣 新着へ', run: () => { setTab('catch'); setCmdkOpen(false) } },
+      { label: '⚔️ 競合へ', run: () => { setTab('battle'); setCmdkOpen(false) } },
+      { label: '＋ 新しい会話', run: () => { newConvo(); setTab('ani'); setCmdkOpen(false) } },
+      { label: '🔄 今すぐ拾う', run: () => { setCmdkOpen(false); runCatchup() } },
+    ]
+    if (!q) return base
+    return [{ label: `「${q}」を兄さんに聞く`, run: () => { setCmdkOpen(false); setTab('ani'); ask(q) } }, ...base.filter(c => c.label.includes(q))]
+  })()
+
   const newConvo = () => { setCurrentId(''); setShowList(false); setInput(''); taRef.current?.focus() }
 
   const ask = async (text?: string) => {
@@ -149,14 +181,14 @@ export default function BrainPage() {
     try {
       const res = await fetch('/api/brain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: msgs }) })
       const data = await res.json()
-      updateConvo(id, c => ({ ...c, turns: c.turns.map((t, i) => (i === 0 ? { q, a: data.answer || '', error: data.error, loading: false } : t)), updatedAt: Date.now() }))
+      updateConvo(id, c => ({ ...c, turns: c.turns.map((t, i) => (i === 0 ? { q, a: data.answer || '', sources: data.sources, error: data.error, loading: false } : t)), updatedAt: Date.now() }))
     } catch (e: any) {
       updateConvo(id, c => ({ ...c, turns: c.turns.map((t, i) => (i === 0 ? { q, a: '', error: String(e), loading: false } : t)) }))
     }
     setLoading(false)
   }
 
-  const tabBtn = (key: 'today' | 'ani' | 'catch', label: string) => (
+  const tabBtn = (key: 'today' | 'ani' | 'catch' | 'battle', label: string) => (
     <button onClick={() => setTab(key)}
       style={{ flex: 1, padding: '9px 0', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', border: 'none', borderBottom: tab === key ? '2px solid #0f0f0f' : '2px solid transparent', background: 'none', color: tab === key ? '#0f0f0f' : '#9a9a9a' }}>
       {label}
@@ -172,7 +204,8 @@ export default function BrainPage() {
         <div style={{ display: 'flex', borderBottom: '0.5px solid rgba(0,0,0,0.1)', marginBottom: 16 }}>
           {tabBtn('today', '☀️ 今日')}
           {tabBtn('ani', '🧠 兄さん')}
-          {tabBtn('catch', `🐣 キャッチアップ${feed.length ? `（${feed.length}）` : ''}`)}
+          {tabBtn('catch', `🐣 新着${feed.length ? `（${feed.length}）` : ''}`)}
+          {tabBtn('battle', '⚔️ 競合')}
         </div>
 
         {tab === 'today' && (
@@ -279,7 +312,7 @@ export default function BrainPage() {
                         <div style={{ maxWidth: '82%', background: '#0f0f0f', color: '#fff', borderRadius: '16px 16px 5px 16px', padding: '10px 15px', fontSize: 14, lineHeight: 1.65, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{qa.q}</div>
                       </div>
                       {/* 兄さん（左のクリーンな本文） */}
-                      <div style={{ display: 'flex', gap: 11, marginBottom: last ? 10 : 24 }}>
+                      <div style={{ display: 'flex', gap: 11, marginBottom: 8 }}>
                         <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: '#eceae3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🧠</div>
                         <div style={{ flex: 1, minWidth: 0, fontSize: 14.5, lineHeight: 1.85, color: '#222', paddingTop: 3 }}>
                           {qa.loading ? <span style={{ color: '#9a9a9a' }}>考えてます…</span>
@@ -287,15 +320,30 @@ export default function BrainPage() {
                               : <div dangerouslySetInnerHTML={{ __html: format(qa.a) }} />}
                         </div>
                       </div>
-                      {last && (
-                        <div style={{ marginLeft: 39, marginBottom: 24, display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                          {FOLLOWUPS.map(c => (
-                            <button key={c} onClick={() => ask(c)} disabled={loading} style={{ fontSize: 11.5, padding: '5px 11px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.13)', borderRadius: 14, color: '#3f3f3f', cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit' }}>{c}</button>
-                          ))}
-                          <button onClick={makeContent} disabled={loading} style={{ fontSize: 11.5, padding: '5px 11px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.13)', borderRadius: 14, color: '#3f3f3f', cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit' }}>✍️ ネタにする</button>
-                          <button onClick={() => copyText(qa.a)} style={{ fontSize: 11.5, padding: '5px 11px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.13)', borderRadius: 14, color: '#3f3f3f', cursor: 'pointer', fontFamily: 'inherit' }}>📋 コピー</button>
-                        </div>
-                      )}
+                      <div style={{ marginLeft: 39, marginBottom: 16 }}>
+                        {qa.sources && qa.sources.length > 0 && !qa.loading && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: last ? 8 : 0 }}>
+                            {qa.sources.map((u: string, j: number) => {
+                              let host = u; try { host = new URL(u).hostname.replace(/^www\./, '') } catch { /* noop */ }
+                              return (
+                                <a key={j} href={u} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#3f3f3f', background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 12, padding: '3px 9px', textDecoration: 'none' }}>
+                                  <img src={`https://www.google.com/s2/favicons?domain=${host}&sz=32`} alt="" width={13} height={13} style={{ borderRadius: 2 }} />
+                                  {host}
+                                </a>
+                              )
+                            })}
+                          </div>
+                        )}
+                        {last && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                            {FOLLOWUPS.map(c => (
+                              <button key={c} onClick={() => ask(c)} disabled={loading} style={{ fontSize: 11.5, padding: '5px 11px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.13)', borderRadius: 14, color: '#3f3f3f', cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit' }}>{c}</button>
+                            ))}
+                            <button onClick={makeContent} disabled={loading} style={{ fontSize: 11.5, padding: '5px 11px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.13)', borderRadius: 14, color: '#3f3f3f', cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit' }}>✍️ ネタにする</button>
+                            <button onClick={() => copyText(qa.a)} style={{ fontSize: 11.5, padding: '5px 11px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.13)', borderRadius: 14, color: '#3f3f3f', cursor: 'pointer', fontFamily: 'inherit' }}>📋 コピー</button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )})}
                   <div ref={bottomRef} />
@@ -397,6 +445,57 @@ export default function BrainPage() {
               </div>
             )}
           </>
+        )}
+
+        {tab === 'battle' && (
+          <div>
+            <div style={{ fontSize: 12.5, color: '#6b6b6b', marginBottom: 14, lineHeight: 1.6 }}>主要競合の30秒バトルカード。商談前にその1枚を見る。反論対応は、まず相手の強みを正直に認めてから旋回。</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {cards.map((b: any, i: number) => (
+                <div key={i} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 10, padding: '13px 15px' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 15, fontWeight: 700 }}>{b.name}</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 600, color: '#c0392b' }}>脅威 {b.threat}</span>
+                    <span style={{ fontSize: 10.5, color: '#9a9a9a' }}>{b.axis}</span>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: '#444', marginTop: 6, lineHeight: 1.6 }}>{b.overview}</div>
+
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: '#1e7e34', marginTop: 10, marginBottom: 4 }}>🎯 我々の勝ち筋</div>
+                  {b.winPlays?.map((w: string, j: number) => (
+                    <div key={j} style={{ fontSize: 12.5, color: '#1f1f1f', lineHeight: 1.55, display: 'flex', gap: 6, marginBottom: 2 }}><span style={{ color: '#bbb' }}>•</span><span>{w}</span></div>
+                  ))}
+
+                  <div style={{ fontSize: 11.5, color: '#6b6b6b', marginTop: 10 }}><b style={{ fontWeight: 600 }}>💰 価格</b>　{b.price}</div>
+
+                  {b.objection && (
+                    <div style={{ marginTop: 10, background: '#f7f7f5', borderRadius: 8, padding: '9px 11px' }}>
+                      <div style={{ fontSize: 12, color: '#6b6b6b', fontStyle: 'italic' }}>💬 {b.objection.says}</div>
+                      <div style={{ fontSize: 12.5, color: '#1f1f1f', marginTop: 4, lineHeight: 1.6 }}>{b.objection.reply}</div>
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: 12, color: '#c0392b', marginTop: 10, lineHeight: 1.55, display: 'flex', gap: 6 }}><span style={{ flexShrink: 0 }}>🚫</span><span><b style={{ fontWeight: 600 }}>言ってはいけない：</b>{b.landmine}</span></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {cmdkOpen && (
+          <div onClick={() => setCmdkOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '12vh', zIndex: 50 }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: 'min(540px, 92vw)', background: '#fff', borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+              <input autoFocus value={cmdkQuery} onChange={e => setCmdkQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') cmds[0]?.run() }}
+                placeholder="コマンド or 質問…（兄さんに聞く / タブ移動 / 今すぐ拾う）"
+                style={{ width: '100%', padding: '14px 16px', border: 'none', borderBottom: '0.5px solid rgba(0,0,0,0.1)', outline: 'none', fontSize: 14.5, fontFamily: "'Inter','Noto Sans JP',sans-serif", boxSizing: 'border-box' }} />
+              <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                {cmds.map((c, i) => (
+                  <div key={i} onClick={c.run} style={{ padding: '11px 16px', fontSize: 13.5, cursor: 'pointer', background: i === 0 ? '#f4f4f2' : '#fff', borderBottom: '0.5px solid rgba(0,0,0,0.04)', fontFamily: "'Inter','Noto Sans JP',sans-serif" }}>{c.label}</div>
+                ))}
+              </div>
+              <div style={{ padding: '8px 16px', fontSize: 10.5, color: '#a9a9a9', borderTop: '0.5px solid rgba(0,0,0,0.06)' }}>Enter で先頭を実行 ・ Esc で閉じる</div>
+            </div>
+          </div>
         )}
       </div>
     </div>
