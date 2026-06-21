@@ -11,6 +11,16 @@ const EXAMPLES = [
 ]
 const LS_KEY = 'brain_convos'
 
+// 📚学ぶ（基礎固め）の順路。各モジュールは兄さんが"授業モード"で教える。
+const LEARN = [
+  { id: 'm1', num: 1, title: 'SAMURAIの4製品', blurb: '何を売ってる会社か（Rendery / knock knock / VISIOAL / カスタム）', prompt: 'SAMURAIの4製品（Rendery / knock knock AI / VISIOAL / カスタム）が何かを、知識ゼロの私に、今日の続きみたいに——たとえ話で・1個ずつ・時々「これどう思う？」と当てさせながら——教えて。まずRenderyから。' },
+  { id: 'm2', num: 2, title: '本丸の顧客＝中小工務店', blurb: '誰に売る・なぜ刺さる・なぜ半信半疑か', prompt: 'SAMURAIの本丸の顧客「中小工務店」について、どんな会社で・何に困ってて・なぜAIに半信半疑かを、知識ゼロの私に、たとえ話で・1個ずつ・当てさせながら教えて。' },
+  { id: 'm3', num: 3, title: '業界の構造', blurb: 'なぜアナログで薄利か（単品受注・重層下請）', prompt: '建設・建築業界が「なぜアナログで薄利なのか」の構造（単品受注・重層下請・薄利少売）を、知識ゼロの私に、因果で・たとえ話で・1個ずつ当てさせながら教えて。' },
+  { id: 'm4', num: 4, title: '国の動き', blurb: '2024年問題・BIM・補助金・不動産DX', prompt: '国が建設業をどう変えようとしてるか（2024年問題・BIM・補助金・不動産DX）を、知識ゼロの私に、なぜ国が動くのかから・たとえ話で・1個ずつ当てさせながら教えて。' },
+  { id: 'm5', num: 5, title: '競合の地図', blurb: '塊で覚える・上下の挟撃・空白ポジション', prompt: 'SAMURAIの競合を「塊で覚える」地図（誰と誰が同じか・上下からの挟撃・空白ポジション）を、知識ゼロの私に、たとえ話で・当てさせながら教えて。' },
+  { id: 'm6', num: 6, title: '正直の線引き', blurb: '中央値で正直・「刺さるけど嘘じゃない」の境界', prompt: 'SAMURAIのルール「最大値を避け中央値で正直に」と、「刺さるけど嘘じゃない」の境界線を、知識ゼロの私に、具体例で・当てさせながら教えて。' },
+]
+
 type QA = { q: string; a: string; sources?: string[]; loading?: boolean; error?: string }
 type Convo = { id: string; title: string; turns: QA[]; updatedAt: number }
 
@@ -36,7 +46,8 @@ function fmtDate(t: number): string {
 }
 
 export default function BrainPage() {
-  const [tab, setTab] = useState<'today' | 'ani' | 'catch' | 'battle'>('today')
+  const [tab, setTab] = useState<'today' | 'learn' | 'ani' | 'catch' | 'battle'>('today')
+  const [learned, setLearned] = useState<string[]>([])
   const [input, setInput] = useState('')
   const [convos, setConvos] = useState<Convo[]>([])
   const [currentId, setCurrentId] = useState<string>('')
@@ -65,6 +76,7 @@ export default function BrainPage() {
       if (savedId && list.some(c => c.id === savedId)) setCurrentId(savedId)
       // 前回キャッチアップを見たとき以降の「新着」を判定するための基準
       setNewCutoff(Number(localStorage.getItem('brain_catch_lastseen') || 0))
+      setLearned(JSON.parse(localStorage.getItem('brain_learned') || '[]'))
     } catch { /* noop */ }
     loadFeed()
     loadWatch()
@@ -158,6 +170,12 @@ export default function BrainPage() {
   const copyText = (t: string) => { try { navigator.clipboard?.writeText(t) } catch { /* noop */ } }
   const makeContent = () => ask('今の回答を、SAMURAI向けに加藤さんの正直な文体でコンテンツの下書き（フック1行＋骨子）にして')
 
+  // 📚学ぶ：モジュールを兄さんの授業モードで開始 ／ 学んだ記録
+  const startLesson = (m: any) => { setTab('ani'); ask(m.prompt, true) }
+  const toggleLearned = (id: string) => {
+    setLearned(prev => { const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]; try { localStorage.setItem('brain_learned', JSON.stringify(next)) } catch { /* noop */ } ; return next })
+  }
+
   // 選択した語句を、その場で平易に解説
   const explainTerm = async () => {
     if (!sel) return
@@ -178,6 +196,7 @@ export default function BrainPage() {
     const q = cmdkQuery.trim()
     const base = [
       { label: '☀️ 今日へ', run: () => { setTab('today'); setCmdkOpen(false) } },
+      { label: '📚 学ぶ（基礎固め）へ', run: () => { setTab('learn'); setCmdkOpen(false) } },
       { label: '🧠 兄さんへ', run: () => { setTab('ani'); setCmdkOpen(false) } },
       { label: '🐣 新着へ', run: () => { setTab('catch'); setCmdkOpen(false) } },
       { label: '⚔️ 競合へ', run: () => { setTab('battle'); setCmdkOpen(false) } },
@@ -190,12 +209,12 @@ export default function BrainPage() {
 
   const newConvo = () => { setCurrentId(''); setShowList(false); setInput(''); taRef.current?.focus() }
 
-  const ask = async (text?: string) => {
+  const ask = async (text?: string, forceNew?: boolean) => {
     const q = (text ?? input).trim()
     if (!q || loading) return
     setLoading(true); setInput('')
 
-    let id = currentId
+    let id = forceNew ? '' : currentId
     const priorTurns: QA[] = id ? (convos.find(c => c.id === id)?.turns || []) : []
     const msgs = [...priorTurns].filter(t => !t.loading && !t.error && t.a).reverse()
       .flatMap(t => [{ role: 'user', content: t.q }, { role: 'assistant', content: t.a }])
@@ -220,9 +239,9 @@ export default function BrainPage() {
     setLoading(false)
   }
 
-  const tabBtn = (key: 'today' | 'ani' | 'catch' | 'battle', label: string) => (
+  const tabBtn = (key: 'today' | 'learn' | 'ani' | 'catch' | 'battle', label: string) => (
     <button onClick={() => setTab(key)}
-      style={{ flex: 1, padding: '9px 0', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', border: 'none', borderBottom: tab === key ? '2px solid #0f0f0f' : '2px solid transparent', background: 'none', color: tab === key ? '#0f0f0f' : '#9a9a9a' }}>
+      style={{ flex: 1, padding: '9px 2px', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', border: 'none', borderBottom: tab === key ? '2px solid #0f0f0f' : '2px solid transparent', background: 'none', color: tab === key ? '#0f0f0f' : '#9a9a9a', whiteSpace: 'nowrap' }}>
       {label}
     </button>
   )
@@ -234,10 +253,11 @@ export default function BrainPage() {
 
         {/* タブ */}
         <div style={{ display: 'flex', borderBottom: '0.5px solid rgba(0,0,0,0.1)', marginBottom: 16 }}>
-          {tabBtn('today', '☀️ 今日')}
-          {tabBtn('ani', '🧠 兄さん')}
-          {tabBtn('catch', `🐣 新着${feed.length ? `（${feed.length}）` : ''}`)}
-          {tabBtn('battle', '⚔️ 競合')}
+          {tabBtn('today', '☀️今日')}
+          {tabBtn('learn', '📚学ぶ')}
+          {tabBtn('ani', '🧠兄さん')}
+          {tabBtn('catch', `🐣新着${feed.length ? `(${feed.length})` : ''}`)}
+          {tabBtn('battle', '⚔️競合')}
         </div>
 
         {tab === 'today' && (
@@ -293,6 +313,33 @@ export default function BrainPage() {
           </div>
         )}
 
+        {tab === 'learn' && (
+          <div>
+            <div style={{ fontSize: 12.5, color: '#6b6b6b', marginBottom: 6, lineHeight: 1.6 }}>ゼロから土台を固める順路。気になる所から「学ぶ」を押すと、兄さんがたとえ話で1個ずつ教えてくれます。</div>
+            <div style={{ fontSize: 11.5, color: '#9a9a9a', marginBottom: 16 }}>{learned.length} / {LEARN.length} 完了</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {LEARN.map(m => {
+                const done = learned.includes(m.id)
+                return (
+                  <div key={m.id} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 10, padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: done ? '#1e7e34' : '#eceae3', color: done ? '#fff' : '#6b6b6b', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{done ? '✓' : m.num}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>{m.title}</div>
+                        <div style={{ fontSize: 12, color: '#6b6b6b', marginTop: 2, lineHeight: 1.5 }}>{m.blurb}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10, marginLeft: 30 }}>
+                      <button onClick={() => startLesson(m)} disabled={loading} style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', background: '#0f0f0f', color: '#fff', border: 'none', borderRadius: 8, cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit' }}>{done ? '🔁 学び直す' : '🎓 学ぶ'}</button>
+                      <button onClick={() => toggleLearned(m.id)} style={{ fontSize: 12, padding: '6px 12px', background: '#fff', color: done ? '#1e7e34' : '#6b6b6b', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>{done ? '✓ 学んだ' : '学んだことにする'}</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {tab === 'ani' && (
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: '74vh' }}>
             {/* 会話ツールバー */}
@@ -331,6 +378,12 @@ export default function BrainPage() {
                         {ex}
                       </button>
                     ))}
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#3f3f3f', marginTop: 22, marginBottom: 8 }}>🛠️ 使ってみる（応用）</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    <button onClick={() => ask('今の業界の新着の動きから、SAMURAI向けの発信コンテンツのネタを、加藤さんの正直な文体で3つ出して')} disabled={loading} style={{ fontSize: 12.5, padding: '7px 13px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 18, color: '#3f3f3f', cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit' }}>✍️ コンテンツのネタ出し</button>
+                    <button onClick={() => { setInput('との商談の準備をしたい。製品 × 相手の痛み × 刺さる一言 × 言ってはいけない地雷 を教えて。相手は：'); taRef.current?.focus() }} style={{ fontSize: 12.5, padding: '7px 13px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 18, color: '#3f3f3f', cursor: 'pointer', fontFamily: 'inherit' }}>🤝 商談の準備</button>
+                    <button onClick={() => { setInput('この下書きを、本丸ペルソナ（中小工務店）と「中央値で正直」ルールに照らして辛口で見て。詐欺っぽい所・刺さらない所を指摘して：\n\n'); taRef.current?.focus() }} style={{ fontSize: 12.5, padding: '7px 13px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 18, color: '#3f3f3f', cursor: 'pointer', fontFamily: 'inherit' }}>🔍 下書きを壁打ち</button>
                   </div>
                 </div>
               ) : (
