@@ -22,11 +22,12 @@ function badgeColor(v: string): string {
 function format(text: string): string {
   const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   return esc
-    .replace(/^### (.+)$/gm, '<div style="font-weight:600;font-size:14px;margin:12px 0 4px">$1</div>')
-    .replace(/^## (.+)$/gm, '<div style="font-weight:600;font-size:15px;margin:14px 0 5px">$1</div>')
-    .replace(/^# (.+)$/gm, '<div style="font-weight:600;font-size:12px;margin:6px 0 4px;color:#6b6b6b">$1</div>')
+    .replace(/^### (.+)$/gm, '<div style="font-weight:600;font-size:15px;margin:16px 0 6px">$1</div>')
+    .replace(/^## (.+)$/gm, '<div style="font-weight:600;font-size:16px;margin:18px 0 7px">$1</div>')
+    .replace(/^# (.+)$/gm, '<div style="font-weight:600;font-size:13px;margin:8px 0 5px;color:#6b6b6b">$1</div>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/^[-・*] (.+)$/gm, '<div style="display:flex;gap:6px;margin:3px 0"><span style="color:#9a9a9a">•</span><span>$1</span></div>')
+    .replace(/^[-・*] (.+)$/gm, '<div style="display:flex;gap:8px;margin:5px 0"><span style="color:#bbb;flex-shrink:0">•</span><span style="flex:1">$1</span></div>')
+    .replace(/\n{2,}/g, '<div style="height:11px"></div>')
     .replace(/\n/g, '<br/>')
 }
 
@@ -44,10 +45,10 @@ export default function BrainPage() {
   const [feed, setFeed] = useState<any[]>([])
   const [summary, setSummary] = useState<any>(null)
   const [watch, setWatch] = useState<any[]>([])
-  const [brief, setBrief] = useState<any>(null)
   const [catching, setCatching] = useState(false)
   const [newCutoff, setNewCutoff] = useState(0)
   const taRef = useRef<HTMLTextAreaElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     try {
@@ -62,18 +63,17 @@ export default function BrainPage() {
     } catch { /* noop */ }
     loadFeed()
     loadWatch()
-    loadBrief()
     taRef.current?.focus()
   }, [])
 
   // キャッチアップを開いたら「ここまで見た」を記録（次回の"新着"判定に使う）
   useEffect(() => { if (tab === 'catch') { try { localStorage.setItem('brain_catch_lastseen', String(Date.now())) } catch { /* noop */ } } }, [tab])
 
+  // 新しい発言が来たら最新までスクロール
+  useEffect(() => { if (tab === 'ani') bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [loading, currentId, tab])
+
   const loadWatch = async () => {
     try { const r = await fetch('/api/brain-watch'); const d = await r.json(); setWatch(Array.isArray(d.watch) ? d.watch : []) } catch { /* noop */ }
-  }
-  const loadBrief = async () => {
-    try { const r = await fetch('/api/brain-brief'); const d = await r.json(); setBrief(d.brief || null) } catch { /* noop */ }
   }
 
   // 開いている会話を記憶（ハードリロードで消えないように）
@@ -164,22 +164,9 @@ export default function BrainPage() {
         </div>
 
         {tab === 'ani' && (
-          <>
-            {brief?.focus && (
-              <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: '12px 14px', marginBottom: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#3f3f3f', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span>📌 今、知っておくこと</span>
-                  <span style={{ fontWeight: 400, color: '#a9a9a9', fontSize: 10.5 }}>{(brief.updatedAt || '').slice(0, 10)} 更新</span>
-                </div>
-                <div style={{ fontSize: 13, lineHeight: 1.7, color: '#1f1f1f' }} dangerouslySetInnerHTML={{ __html: format(brief.focus) }} />
-              </div>
-            )}
-            <div style={{ fontSize: 12.5, color: '#6b6b6b', marginBottom: 12, lineHeight: 1.6 }}>
-              なんでも知ってる"兄さん"。わからん言葉も記事もURLも投げて。サクッとも、じっくりもOK。
-            </div>
-
+          <div style={{ display: 'flex', flexDirection: 'column', minHeight: '74vh' }}>
             {/* 会話ツールバー */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
               <button onClick={newConvo}
                 style={{ fontSize: 12, padding: '6px 12px', background: '#0f0f0f', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>＋ 新しい会話</button>
               <button onClick={() => setShowList(s => !s)}
@@ -188,7 +175,6 @@ export default function BrainPage() {
               </button>
             </div>
 
-            {/* 過去の会話リスト */}
             {showList && (
               <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 10, marginBottom: 12, overflow: 'hidden' }}>
                 {convos.length === 0 ? (
@@ -203,54 +189,63 @@ export default function BrainPage() {
               </div>
             )}
 
-            {/* 入力 */}
-            <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 10, padding: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            {/* 会話（時系列・吹き出し） */}
+            <div style={{ flex: 1 }}>
+              {history.length === 0 ? (
+                <div style={{ padding: '6px 0 20px' }}>
+                  <div style={{ fontSize: 14, color: '#6b6b6b', lineHeight: 1.75, marginBottom: 16 }}>なんでも知ってる"兄さん"。わからん言葉も、記事も、URLも投げて。サクッとも、じっくりもOK。</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {EXAMPLES.map(ex => (
+                      <button key={ex} onClick={() => ask(ex)} disabled={loading}
+                        style={{ fontSize: 12.5, padding: '7px 13px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 18, color: '#3f3f3f', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        {ex}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 100 }}>
+                  {[...history].reverse().map((qa, i) => (
+                    <div key={i}>
+                      {/* 自分（右の吹き出し） */}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                        <div style={{ maxWidth: '82%', background: '#0f0f0f', color: '#fff', borderRadius: '16px 16px 5px 16px', padding: '10px 15px', fontSize: 14, lineHeight: 1.65, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{qa.q}</div>
+                      </div>
+                      {/* 兄さん（左のクリーンな本文） */}
+                      <div style={{ display: 'flex', gap: 11, marginBottom: 24 }}>
+                        <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: '#eceae3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🧠</div>
+                        <div style={{ flex: 1, minWidth: 0, fontSize: 14.5, lineHeight: 1.85, color: '#222', paddingTop: 3 }}>
+                          {qa.loading ? <span style={{ color: '#9a9a9a' }}>考えてます…</span>
+                            : qa.error ? <span style={{ color: '#c0392b' }}>エラー：{qa.error}</span>
+                              : <div dangerouslySetInnerHTML={{ __html: format(qa.a) }} />}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={bottomRef} />
+                </div>
+              )}
+            </div>
+
+            {/* 入力（下に固定） */}
+            <div style={{ position: 'sticky', bottom: 12, background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 14, padding: 12, boxShadow: '0 2px 16px rgba(0,0,0,0.09)' }}>
               <textarea
                 ref={taRef}
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') ask() }}
-                placeholder="わからん言葉、記事、URL…なんでも。&#10;例：BIMって何？　／　〔記事やURLを貼る〕"
-                style={{ width: '100%', minHeight: 80, border: 'none', outline: 'none', resize: 'vertical', fontSize: 14, fontFamily: 'inherit', lineHeight: 1.6, background: 'transparent', color: '#0f0f0f', boxSizing: 'border-box' }}
+                placeholder="兄さんに聞く… 例：BIMって何？　／　記事やURLを貼る"
+                style={{ width: '100%', minHeight: 44, maxHeight: 200, border: 'none', outline: 'none', resize: 'none', fontSize: 14.5, fontFamily: 'inherit', lineHeight: 1.6, background: 'transparent', color: '#0f0f0f', boxSizing: 'border-box' }}
               />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                <span style={{ fontSize: 11, color: '#9a9a9a' }}>⌘/Ctrl + Enter で送信</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
+                <span style={{ fontSize: 11, color: '#bbb' }}>⌘/Ctrl + Enter</span>
                 <button onClick={() => ask()} disabled={loading || !input.trim()}
-                  style={{ padding: '8px 22px', background: input.trim() && !loading ? '#0f0f0f' : '#d4d4d2', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: input.trim() && !loading ? 'pointer' : 'default', fontFamily: 'inherit' }}>
-                  {loading ? '考え中…' : '聞く'}
+                  style={{ padding: '8px 20px', background: input.trim() && !loading ? '#0f0f0f' : '#e2e0da', color: '#fff', border: 'none', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: input.trim() && !loading ? 'pointer' : 'default', fontFamily: 'inherit' }}>
+                  {loading ? '…' : '送信'}
                 </button>
               </div>
             </div>
-
-            {/* 例（会話が空のとき） */}
-            {history.length === 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 14 }}>
-                {EXAMPLES.map(ex => (
-                  <button key={ex} onClick={() => ask(ex)} disabled={loading}
-                    style={{ fontSize: 12, padding: '6px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 16, color: '#3f3f3f', cursor: 'pointer', fontFamily: 'inherit' }}>
-                    {ex}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* 会話 */}
-            <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {history.map((qa, i) => (
-                <div key={i}>
-                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, display: 'flex', gap: 8 }}>
-                    <span style={{ color: '#9a9a9a', flexShrink: 0 }}>Q</span>
-                    <span style={{ whiteSpace: 'pre-wrap' }}>{qa.q.length > 200 ? qa.q.slice(0, 200) + '…' : qa.q}</span>
-                  </div>
-                  <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.08)', borderRadius: 10, padding: '14px 16px', fontSize: 14, lineHeight: 1.75, color: '#1f1f1f' }}>
-                    {qa.loading ? <span style={{ color: '#9a9a9a' }}>🧠 ポケットを探ってます…</span>
-                      : qa.error ? <span style={{ color: '#c0392b' }}>エラー：{qa.error}</span>
-                        : <div dangerouslySetInnerHTML={{ __html: format(qa.a) }} />}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
+          </div>
         )}
 
         {tab === 'catch' && (
