@@ -36,7 +36,7 @@ function fmtDate(t: number): string {
 }
 
 export default function BrainPage() {
-  const [tab, setTab] = useState<'ani' | 'catch'>('ani')
+  const [tab, setTab] = useState<'today' | 'ani' | 'catch'>('today')
   const [input, setInput] = useState('')
   const [convos, setConvos] = useState<Convo[]>([])
   const [currentId, setCurrentId] = useState<string>('')
@@ -113,6 +113,17 @@ export default function BrainPage() {
     setTimeout(() => taRef.current?.focus(), 60)
   }
 
+  // 「今日」タブ用：重要度順 上位3件
+  const VPRI: Record<string, number> = { competitor: 0, threat: 1, tailwind: 2, research: 3, none: 9 }
+  const today3 = [...feed]
+    .sort((a: any, b: any) => ((isNew(b) ? 1 : 0) - (isNew(a) ? 1 : 0)) || ((VPRI[a.verdict] ?? 5) - (VPRI[b.verdict] ?? 5)))
+    .slice(0, 3)
+
+  // 兄さんの回答下：フォロー質問＆ワンクリック行動
+  const FOLLOWUPS = ['根拠と出典は？', '競合はどう動いてる？', 'うちのLP・コンテンツに落とすと？']
+  const copyText = (t: string) => { try { navigator.clipboard?.writeText(t) } catch { /* noop */ } }
+  const makeContent = () => ask('今の回答を、SAMURAI向けに加藤さんの正直な文体でコンテンツの下書き（フック1行＋骨子）にして')
+
   const newConvo = () => { setCurrentId(''); setShowList(false); setInput(''); taRef.current?.focus() }
 
   const ask = async (text?: string) => {
@@ -145,7 +156,7 @@ export default function BrainPage() {
     setLoading(false)
   }
 
-  const tabBtn = (key: 'ani' | 'catch', label: string) => (
+  const tabBtn = (key: 'today' | 'ani' | 'catch', label: string) => (
     <button onClick={() => setTab(key)}
       style={{ flex: 1, padding: '9px 0', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', border: 'none', borderBottom: tab === key ? '2px solid #0f0f0f' : '2px solid transparent', background: 'none', color: tab === key ? '#0f0f0f' : '#9a9a9a' }}>
       {label}
@@ -159,9 +170,63 @@ export default function BrainPage() {
 
         {/* タブ */}
         <div style={{ display: 'flex', borderBottom: '0.5px solid rgba(0,0,0,0.1)', marginBottom: 16 }}>
+          {tabBtn('today', '☀️ 今日')}
           {tabBtn('ani', '🧠 兄さん')}
           {tabBtn('catch', `🐣 キャッチアップ${feed.length ? `（${feed.length}）` : ''}`)}
         </div>
+
+        {tab === 'today' && (
+          <div>
+            <div style={{ fontSize: 13, color: '#9a9a9a', marginBottom: 16 }}>{new Date().toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' })}・自社マーケのいま</div>
+
+            {summary?.text && (
+              <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: '12px 14px', marginBottom: 18, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#3f3f3f', marginBottom: 6 }}>⚡ 30秒キャッチアップ</div>
+                <div style={{ fontSize: 13.5, lineHeight: 1.75, color: '#1f1f1f' }} dangerouslySetInnerHTML={{ __html: format(summary.text) }} />
+              </div>
+            )}
+
+            {today3.length > 0 && (
+              <div style={{ marginBottom: 22 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: '#3f3f3f', marginBottom: 8 }}>📍 今日の3つ</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {today3.map((f: any, i: number) => (
+                    <div key={f.id || i} style={{ background: '#fff', border: `0.5px solid ${isNew(f) ? 'rgba(192,57,43,0.35)' : 'rgba(0,0,0,0.08)'}`, borderRadius: 8, padding: '10px 12px' }}>
+                      <div style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
+                        <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: badgeColor(f.verdict) }}>{f.badge || ''}</span>
+                        {isNew(f) && <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 700, color: '#fff', background: '#c0392b', borderRadius: 4, padding: '1px 5px' }}>NEW</span>}
+                        <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.45 }}>{f.oneLine || f.title}</span>
+                      </div>
+                      {f.soWhat && <div style={{ fontSize: 12.5, color: '#444', marginTop: 4, lineHeight: 1.55, borderLeft: '2px solid #e2e0da', paddingLeft: 8 }}>{f.soWhat}</div>}
+                      <div style={{ fontSize: 10.5, color: '#a9a9a9', marginTop: 6, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                        {f.source && <span>{f.source}</span>}
+                        {f.link && <a href={f.link} target="_blank" rel="noopener noreferrer" style={{ color: '#7a8cff' }}>元記事</a>}
+                        <button onClick={() => fromFeed(f, 'ask')} style={{ fontSize: 10.5, color: '#3f3f3f', background: 'none', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>🧠 深掘り</button>
+                        <button onClick={() => fromFeed(f, 'make')} style={{ fontSize: 10.5, color: '#3f3f3f', background: 'none', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>✍️ ネタにする</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div onClick={() => setTab('catch')} style={{ fontSize: 12, color: '#7a8cff', cursor: 'pointer', marginTop: 10 }}>→ 全部見る（キャッチアップ）</div>
+              </div>
+            )}
+
+            {convos.length > 0 ? (
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: '#3f3f3f', marginBottom: 8 }}>▶ 続き</div>
+                <div onClick={() => { setCurrentId(convos[0].id); setTab('ani') }}
+                  style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.08)', borderRadius: 8, padding: '11px 13px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{convos[0].title || '無題の会話'}</span>
+                  <span style={{ fontSize: 11, color: '#a9a9a9', flexShrink: 0 }}>{fmtDate(convos[0].updatedAt)}・続ける →</span>
+                </div>
+              </div>
+            ) : (
+              <div onClick={() => setTab('ani')} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.08)', borderRadius: 8, padding: '12px 14px', cursor: 'pointer', fontSize: 13, color: '#6b6b6b' }}>
+                🧠 兄さんに何でも聞く →
+              </div>
+            )}
+          </div>
+        )}
 
         {tab === 'ani' && (
           <div style={{ display: 'flex', flexDirection: 'column', minHeight: '74vh' }}>
@@ -205,14 +270,16 @@ export default function BrainPage() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 100 }}>
-                  {[...history].reverse().map((qa, i) => (
+                  {[...history].reverse().map((qa, i, arr) => {
+                    const last = i === arr.length - 1 && !!qa.a && !qa.loading && !qa.error
+                    return (
                     <div key={i}>
                       {/* 自分（右の吹き出し） */}
                       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
                         <div style={{ maxWidth: '82%', background: '#0f0f0f', color: '#fff', borderRadius: '16px 16px 5px 16px', padding: '10px 15px', fontSize: 14, lineHeight: 1.65, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{qa.q}</div>
                       </div>
                       {/* 兄さん（左のクリーンな本文） */}
-                      <div style={{ display: 'flex', gap: 11, marginBottom: 24 }}>
+                      <div style={{ display: 'flex', gap: 11, marginBottom: last ? 10 : 24 }}>
                         <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: '50%', background: '#eceae3', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>🧠</div>
                         <div style={{ flex: 1, minWidth: 0, fontSize: 14.5, lineHeight: 1.85, color: '#222', paddingTop: 3 }}>
                           {qa.loading ? <span style={{ color: '#9a9a9a' }}>考えてます…</span>
@@ -220,8 +287,17 @@ export default function BrainPage() {
                               : <div dangerouslySetInnerHTML={{ __html: format(qa.a) }} />}
                         </div>
                       </div>
+                      {last && (
+                        <div style={{ marginLeft: 39, marginBottom: 24, display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                          {FOLLOWUPS.map(c => (
+                            <button key={c} onClick={() => ask(c)} disabled={loading} style={{ fontSize: 11.5, padding: '5px 11px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.13)', borderRadius: 14, color: '#3f3f3f', cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit' }}>{c}</button>
+                          ))}
+                          <button onClick={makeContent} disabled={loading} style={{ fontSize: 11.5, padding: '5px 11px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.13)', borderRadius: 14, color: '#3f3f3f', cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit' }}>✍️ ネタにする</button>
+                          <button onClick={() => copyText(qa.a)} style={{ fontSize: 11.5, padding: '5px 11px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.13)', borderRadius: 14, color: '#3f3f3f', cursor: 'pointer', fontFamily: 'inherit' }}>📋 コピー</button>
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  )})}
                   <div ref={bottomRef} />
                 </div>
               )}
