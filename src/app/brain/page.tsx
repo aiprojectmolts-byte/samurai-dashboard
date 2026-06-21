@@ -146,7 +146,7 @@ export default function BrainPage() {
             {brief?.focus && (
               <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: '12px 14px', marginBottom: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#3f3f3f', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span>📌 今のフォーカス</span>
+                  <span>📌 今、知っておくこと</span>
                   <span style={{ fontWeight: 400, color: '#a9a9a9', fontSize: 10.5 }}>{(brief.updatedAt || '').slice(0, 10)} 更新</span>
                 </div>
                 <div style={{ fontSize: 13, lineHeight: 1.7, color: '#1f1f1f' }} dangerouslySetInnerHTML={{ __html: format(brief.focus) }} />

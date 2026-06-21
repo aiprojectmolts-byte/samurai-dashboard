@@ -29,7 +29,7 @@ export async function POST(request: Request) {
           headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
           body: JSON.stringify({
             model: 'claude-haiku-4-5-20251001', max_tokens: 500,
-            system: '次のマーケ・ブリーフから「今のフォーカス」を3〜4行で抽出。各行「- 」始まり、簡潔・装飾なし。①今いちばんの急所(締切や最優先) ②戦況の変化 ③今週の重心 の順。創作せずブリーフ内の事実だけ。',
+            system: '次のマーケ・ブリーフから、自社マーケ担当が「今、頭に入れておくべき現状」を3〜4行で抽出。各行「- 」始まり、簡潔・装飾控えめ。観点=①自社の今の状態 ②競合・市場で起きている変化 ③注意すべき動き。【禁止】「〜せよ」「〜を通す」「〜が急務」などの"やること・締切・指示"は書かない（それはタスク管理の領域）。あくまで状態・事実・変化として書く。創作せずブリーフ内の事実だけ。',
             messages: [{ role: 'user', content: String(text).slice(0, 12000) }],
           }),
         })
