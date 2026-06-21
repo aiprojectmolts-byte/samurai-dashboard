@@ -12,13 +12,28 @@ const EXAMPLES = [
 const LS_KEY = 'brain_convos'
 
 // 📚学ぶ（基礎固め）の順路。各モジュールは兄さんが"授業モード"で教える。
+const LEARN_CATS = ['土台（自社と業界の基礎）', 'マーケの土台', '自社を深く', '業界を広く']
 const LEARN = [
-  { id: 'm1', num: 1, title: 'SAMURAIの4製品', blurb: '何を売ってる会社か（Rendery / knock knock / VISIOAL / カスタム）', prompt: 'SAMURAIの4製品（Rendery / knock knock AI / VISIOAL / カスタム）が何かを、知識ゼロの私に、今日の続きみたいに——たとえ話で・1個ずつ・時々「これどう思う？」と当てさせながら——教えて。まずRenderyから。' },
-  { id: 'm2', num: 2, title: '本丸の顧客＝中小工務店', blurb: '誰に売る・なぜ刺さる・なぜ半信半疑か', prompt: 'SAMURAIの本丸の顧客「中小工務店」について、どんな会社で・何に困ってて・なぜAIに半信半疑かを、知識ゼロの私に、たとえ話で・1個ずつ・当てさせながら教えて。' },
-  { id: 'm3', num: 3, title: '業界の構造', blurb: 'なぜアナログで薄利か（単品受注・重層下請）', prompt: '建設・建築業界が「なぜアナログで薄利なのか」の構造（単品受注・重層下請・薄利少売）を、知識ゼロの私に、因果で・たとえ話で・1個ずつ当てさせながら教えて。' },
-  { id: 'm4', num: 4, title: '国の動き', blurb: '2024年問題・BIM・補助金・不動産DX', prompt: '国が建設業をどう変えようとしてるか（2024年問題・BIM・補助金・不動産DX）を、知識ゼロの私に、なぜ国が動くのかから・たとえ話で・1個ずつ当てさせながら教えて。' },
-  { id: 'm5', num: 5, title: '競合の地図', blurb: '塊で覚える・上下の挟撃・空白ポジション', prompt: 'SAMURAIの競合を「塊で覚える」地図（誰と誰が同じか・上下からの挟撃・空白ポジション）を、知識ゼロの私に、たとえ話で・当てさせながら教えて。' },
-  { id: 'm6', num: 6, title: '正直の線引き', blurb: '中央値で正直・「刺さるけど嘘じゃない」の境界', prompt: 'SAMURAIのルール「最大値を避け中央値で正直に」と、「刺さるけど嘘じゃない」の境界線を、知識ゼロの私に、具体例で・当てさせながら教えて。' },
+  // ── 土台 ──
+  { id: 'm1', num: 1, cat: LEARN_CATS[0], title: 'SAMURAIの4製品', blurb: '何を売ってる会社か（Rendery / knock knock / VISIOAL / カスタム）', prompt: 'SAMURAIの4製品（Rendery / knock knock AI / VISIOAL / カスタム）が何かを、知識ゼロの私に、今日の続きみたいに——たとえ話で・1個ずつ・時々「これどう思う？」と当てさせながら——教えて。まずRenderyから。' },
+  { id: 'm2', num: 2, cat: LEARN_CATS[0], title: '本丸の顧客＝中小工務店', blurb: '誰に売る・なぜ刺さる・なぜ半信半疑か', prompt: 'SAMURAIの本丸の顧客「中小工務店」について、どんな会社で・何に困ってて・なぜAIに半信半疑かを、知識ゼロの私に、たとえ話で・1個ずつ・当てさせながら教えて。' },
+  { id: 'm3', num: 3, cat: LEARN_CATS[0], title: '業界の構造', blurb: 'なぜアナログで薄利か（単品受注・重層下請）', prompt: '建設・建築業界が「なぜアナログで薄利なのか」の構造（単品受注・重層下請・薄利少売）を、知識ゼロの私に、因果で・たとえ話で・1個ずつ当てさせながら教えて。' },
+  { id: 'm4', num: 4, cat: LEARN_CATS[0], title: '国の動き', blurb: '2024年問題・BIM・補助金・不動産DX', prompt: '国が建設業をどう変えようとしてるか（2024年問題・BIM・補助金・不動産DX）を、知識ゼロの私に、なぜ国が動くのかから・たとえ話で・1個ずつ当てさせながら教えて。' },
+  { id: 'm5', num: 5, cat: LEARN_CATS[0], title: '競合の地図', blurb: '塊で覚える・上下の挟撃・空白ポジション', prompt: 'SAMURAIの競合を「塊で覚える」地図（誰と誰が同じか・上下からの挟撃・空白ポジション）を、知識ゼロの私に、たとえ話で・当てさせながら教えて。' },
+  // ── マーケの土台 ──
+  { id: 'm6', num: 6, cat: LEARN_CATS[1], title: 'そもそもマーケって何？', blurb: '認知→信頼→相談の流れ・Layer A/B', prompt: 'そもそもマーケティングって何かを、知識ゼロの私に、たとえ話で・1個ずつ・当てさせながら教えて。「知ってもらう→信じてもらう→相談される」の流れと、Layer A(認知)とLayer B(信頼)の違いから。' },
+  { id: 'm7', num: 7, cat: LEARN_CATS[1], title: '数字で語る（KPI・計測）', blurb: 'KPI・CVって何か・SAMURAIで何を測ってるか', prompt: 'マーケで「数字で語る」とは何かを、知識ゼロの私に教えて。KPI・CV(コンバージョン)って何か、SAMURAIで何を測ってるか(全体PV/問い合わせ/CV・製品別)、なぜ計測が大事かを、たとえ話で・当てさせながら。' },
+  { id: 'm8', num: 8, cat: LEARN_CATS[1], title: '自社のマーケ戦略', blurb: 'KGI（相談1.5倍）と7つの施策', prompt: 'SAMURAIの今のマーケ戦略を、知識ゼロの私に教えて。KGI(1年で相談数1.5倍)、Layer A(認知)→B(信頼)→相談の導線、7つの施策が何か、を当てさせながら1個ずつ。' },
+  { id: 'm9', num: 9, cat: LEARN_CATS[1], title: '正直の線引き', blurb: '中央値で正直・「刺さるけど嘘じゃない」の境界', prompt: 'SAMURAIのルール「最大値を避け中央値で正直に」と、「刺さるけど嘘じゃない」の境界線を、知識ゼロの私に、具体例で・当てさせながら教えて。' },
+  { id: 'm10', num: 10, cat: LEARN_CATS[1], title: 'コンテンツの作り方', blurb: '加藤の文体・抽象↔具体・読者の生の一言', prompt: 'SAMURAIの発信コンテンツを「加藤さんの正直な文体」でどう作るかを、知識ゼロの私に教えて。最大値を避け中央値で正直に・抽象↔具体の往復・読者の生の一言から始める、を例で・当てさせながら。' },
+  // ── 自社を深く ──
+  { id: 'm11', num: 11, cat: LEARN_CATS[2], title: '顧客の深層心理', blurb: '取り残される怖さ × 半信半疑', prompt: '中小工務店の社長の「深層心理」を、知識ゼロの私に教えて。「取り残される怖さ × 半信半疑」が何か、なぜそうなるか、それにどう寄り添うかを、たとえ話で・当てさせながら。' },
+  { id: 'm12', num: 12, cat: LEARN_CATS[2], title: '製品の"引き込みの瞬間"', blurb: 'たたき台vs作品・打率・誰をいつ引き込む', prompt: 'SAMURAIの各製品が「誰を・どの瞬間に引き込むか」を、知識ゼロの私に教えて。「たたき台 vs 作品」の違い、工務店は「提案の打率」、製品ごとに引き込む相手と瞬間が違うこと、を当てさせながら。' },
+  { id: 'm13', num: 13, cat: LEARN_CATS[2], title: 'メディア露出とPR資産', blurb: 'ZIP!・日経xTECH・三菱商事PoCの活かし方', prompt: 'SAMURAIがこれまで取り上げられたメディア(ZIP!地上波・日経xTECH・三菱商事PoC等)と、それをマーケでどう活かすかを、知識ゼロの私に教えて。なぜ資産化が大事かから・当てさせながら。' },
+  { id: 'm14', num: 14, cat: LEARN_CATS[2], title: '誰と対等に話すか', blurb: '建築家/ゼネコン/行政/研究者/加藤CEO…', prompt: 'SAMURAIのマーケ担当が対等に話せるべき相手(建築家・工務店・ゼネコン・デベロッパー・行政・研究者・加藤CEO)それぞれが何を気にしてるか・地雷は何かを、知識ゼロの私に・1人ずつ・当てさせながら教えて。' },
+  // ── 業界を広く ──
+  { id: 'm15', num: 15, cat: LEARN_CATS[3], title: '不動産業界（knock knockの世界）', blurb: '仲介・管理の世界・空室=お金の出血・不動産DX', prompt: 'knock knock AIの客＝不動産仲介・管理の世界を、知識ゼロの私に教えて。彼らの仕事・痛み(空室=お金の出血)、不動産DX(IT重説・電子契約)が何か、を当てさせながら。' },
+  { id: 'm16', num: 16, cat: LEARN_CATS[3], title: '業界の系譜（アカデミック）', blurb: 'Frei Otto→Grasshopper→生成AI・建築情報学', prompt: '建築×AIの「学術的な系譜」を、知識ゼロの私に教えて。Frei Otto→Grasshopper→生成AIの50年の流れ、建築情報学って何か、を当てさせながら。建築家と話すとき効く知識として。' },
 ]
 
 type QA = { q: string; a: string; sources?: string[]; loading?: boolean; error?: string }
@@ -317,26 +332,31 @@ export default function BrainPage() {
           <div>
             <div style={{ fontSize: 12.5, color: '#6b6b6b', marginBottom: 6, lineHeight: 1.6 }}>ゼロから土台を固める順路。気になる所から「学ぶ」を押すと、兄さんがたとえ話で1個ずつ教えてくれます。</div>
             <div style={{ fontSize: 11.5, color: '#9a9a9a', marginBottom: 16 }}>{learned.length} / {LEARN.length} 完了</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {LEARN.map(m => {
-                const done = learned.includes(m.id)
-                return (
-                  <div key={m.id} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 10, padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                      <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: done ? '#1e7e34' : '#eceae3', color: done ? '#fff' : '#6b6b6b', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{done ? '✓' : m.num}</span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600 }}>{m.title}</div>
-                        <div style={{ fontSize: 12, color: '#6b6b6b', marginTop: 2, lineHeight: 1.5 }}>{m.blurb}</div>
+            {LEARN_CATS.map(cat => (
+              <div key={cat} style={{ marginBottom: 22 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#3f3f3f', marginBottom: 10 }}>{cat}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {LEARN.filter(m => m.cat === cat).map(m => {
+                    const done = learned.includes(m.id)
+                    return (
+                      <div key={m.id} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 10, padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                          <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: done ? '#1e7e34' : '#eceae3', color: done ? '#fff' : '#6b6b6b', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{done ? '✓' : m.num}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600 }}>{m.title}</div>
+                            <div style={{ fontSize: 12, color: '#6b6b6b', marginTop: 2, lineHeight: 1.5 }}>{m.blurb}</div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 10, marginLeft: 30 }}>
+                          <button onClick={() => startLesson(m)} disabled={loading} style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', background: '#0f0f0f', color: '#fff', border: 'none', borderRadius: 8, cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit' }}>{done ? '🔁 学び直す' : '🎓 学ぶ'}</button>
+                          <button onClick={() => toggleLearned(m.id)} style={{ fontSize: 12, padding: '6px 12px', background: '#fff', color: done ? '#1e7e34' : '#6b6b6b', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>{done ? '✓ 学んだ' : '学んだことにする'}</button>
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 10, marginLeft: 30 }}>
-                      <button onClick={() => startLesson(m)} disabled={loading} style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', background: '#0f0f0f', color: '#fff', border: 'none', borderRadius: 8, cursor: loading ? 'default' : 'pointer', fontFamily: 'inherit' }}>{done ? '🔁 学び直す' : '🎓 学ぶ'}</button>
-                      <button onClick={() => toggleLearned(m.id)} style={{ fontSize: 12, padding: '6px 12px', background: '#fff', color: done ? '#1e7e34' : '#6b6b6b', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>{done ? '✓ 学んだ' : '学んだことにする'}</button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
