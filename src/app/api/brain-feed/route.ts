@@ -16,8 +16,9 @@ export async function GET() {
         if (!k || seen.has(k)) return false
         seen.add(k); return true
       })
-    return NextResponse.json({ feed })
+    const summary = (await redis.get<any>('samurai:brain-catch-summary')) || null
+    return NextResponse.json({ feed, summary })
   } catch {
-    return NextResponse.json({ feed: [] })
+    return NextResponse.json({ feed: [], summary: null })
   }
 }

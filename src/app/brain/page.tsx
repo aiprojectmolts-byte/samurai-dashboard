@@ -42,9 +42,11 @@ export default function BrainPage() {
   const [loading, setLoading] = useState(false)
   const [showList, setShowList] = useState(false)
   const [feed, setFeed] = useState<any[]>([])
+  const [summary, setSummary] = useState<any>(null)
   const [watch, setWatch] = useState<any[]>([])
   const [brief, setBrief] = useState<any>(null)
   const [catching, setCatching] = useState(false)
+  const [newCutoff, setNewCutoff] = useState(0)
   const taRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -55,12 +57,17 @@ export default function BrainPage() {
       // リロードしても、最後に開いていた会話をそのまま復活させる
       const savedId = localStorage.getItem('brain_current') || ''
       if (savedId && list.some(c => c.id === savedId)) setCurrentId(savedId)
+      // 前回キャッチアップを見たとき以降の「新着」を判定するための基準
+      setNewCutoff(Number(localStorage.getItem('brain_catch_lastseen') || 0))
     } catch { /* noop */ }
     loadFeed()
     loadWatch()
     loadBrief()
     taRef.current?.focus()
   }, [])
+
+  // キャッチアップを開いたら「ここまで見た」を記録（次回の"新着"判定に使う）
+  useEffect(() => { if (tab === 'catch') { try { localStorage.setItem('brain_catch_lastseen', String(Date.now())) } catch { /* noop */ } } }, [tab])
 
   const loadWatch = async () => {
     try { const r = await fetch('/api/brain-watch'); const d = await r.json(); setWatch(Array.isArray(d.watch) ? d.watch : []) } catch { /* noop */ }
@@ -83,13 +90,27 @@ export default function BrainPage() {
   const history = current ? current.turns : []
 
   const loadFeed = async () => {
-    try { const r = await fetch('/api/brain-feed'); const d = await r.json(); setFeed(Array.isArray(d.feed) ? d.feed : []) } catch { /* noop */ }
+    try { const r = await fetch('/api/brain-feed'); const d = await r.json(); setFeed(Array.isArray(d.feed) ? d.feed : []); setSummary(d.summary || null) } catch { /* noop */ }
   }
   const runCatchup = async () => {
     if (catching) return
     setCatching(true)
     try { await fetch('/api/cron/catchup'); await loadFeed() } catch { /* noop */ }
     setCatching(false)
+  }
+
+  const isNew = (f: any) => { try { return !!(f?.createdAt && new Date(f.createdAt).getTime() > newCutoff) } catch { return false } }
+  const newCount = feed.filter(isNew).length
+
+  // キャッチアップのニュースを兄さんに渡す（読む→動くに繋ぐ）
+  const fromFeed = (f: any, mode: 'ask' | 'make') => {
+    const head = f.oneLine || f.title || ''
+    const link = f.link ? `\n${f.link}` : ''
+    setInput(mode === 'make'
+      ? `次のニュースを、SAMURAI向けに加藤さんの正直な文体でコンテンツの下書き（フック1行＋骨子）にして：\n「${head}」${link}`
+      : `次のニュース、SAMURAIにどう関係する？詳しく教えて：\n「${head}」${link}`)
+    setTab('ani')
+    setTimeout(() => taRef.current?.focus(), 60)
   }
 
   const newConvo = () => { setCurrentId(''); setShowList(false); setInput(''); taRef.current?.focus() }
@@ -234,15 +255,56 @@ export default function BrainPage() {
 
         {tab === 'catch' && (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <div style={{ fontSize: 12.5, color: '#6b6b6b', lineHeight: 1.6 }}>毎朝、業界・競合の新着を拾って 🔴競合 / ⚠️脅威 / 🟢追い風 / 🎓研究 に仕分け。</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ fontSize: 12.5, color: '#6b6b6b', lineHeight: 1.6 }}>業界・競合の新着を拾って、要点に束ねます。</div>
               <button onClick={runCatchup} disabled={catching}
                 style={{ flexShrink: 0, fontSize: 12, padding: '6px 12px', background: '#fff', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 14, color: '#3f3f3f', cursor: catching ? 'default' : 'pointer', fontFamily: 'inherit' }}>
                 {catching ? '拾ってます…' : '🔄 今すぐ拾う'}
               </button>
             </div>
+
+            {/* ⚡30秒キャッチアップ（要約） */}
+            {summary?.text && (
+              <div style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 10, padding: '12px 14px', marginBottom: 18, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#3f3f3f', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span>⚡ 30秒キャッチアップ</span>
+                  <span style={{ fontWeight: 400, color: '#a9a9a9', fontSize: 10.5 }}>{(summary.updatedAt || '').slice(5, 10)} 更新</span>
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.7, color: '#1f1f1f' }} dangerouslySetInnerHTML={{ __html: format(summary.text) }} />
+              </div>
+            )}
+
+            {/* 新着ニュース */}
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: '#3f3f3f', marginBottom: 8, display: 'flex', gap: 8, alignItems: 'baseline' }}>
+              <span>📰 新着ニュース</span>
+              {newCount > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: '#c0392b' }}>NEW {newCount}件</span>}
+            </div>
+            {feed.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#9a9a9a', padding: '14px 0', lineHeight: 1.6 }}>まだ新着はありません。「今すぐ拾う」で最新ニュースを集めます。</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {feed.map((f, i) => (
+                  <div key={f.id || i} style={{ background: '#fff', border: `0.5px solid ${isNew(f) ? 'rgba(192,57,43,0.35)' : 'rgba(0,0,0,0.08)'}`, borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
+                      <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: badgeColor(f.verdict) }}>{f.badge || ''}</span>
+                      {isNew(f) && <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 700, color: '#fff', background: '#c0392b', borderRadius: 4, padding: '1px 5px' }}>NEW</span>}
+                      <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.45 }}>{f.oneLine || f.title}</span>
+                    </div>
+                    {f.soWhat && <div style={{ fontSize: 12.5, color: '#5a5a5a', marginTop: 3, lineHeight: 1.5 }}>→ {f.soWhat}</div>}
+                    <div style={{ fontSize: 10.5, color: '#a9a9a9', marginTop: 6, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {f.source && <span>{f.source}</span>}
+                      {f.link && <a href={f.link} target="_blank" rel="noopener noreferrer" style={{ color: '#7a8cff' }}>元記事</a>}
+                      <button onClick={() => fromFeed(f, 'ask')} style={{ fontSize: 10.5, color: '#3f3f3f', background: 'none', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>🧠 兄さんに聞く</button>
+                      <button onClick={() => fromFeed(f, 'make')} style={{ fontSize: 10.5, color: '#3f3f3f', background: 'none', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>✍️ ネタにする</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ウォッチ中（参考・下に置く） */}
             {watch.length > 0 && (
-              <div style={{ marginBottom: 18 }}>
+              <div style={{ marginTop: 24 }}>
                 <div style={{ fontSize: 12.5, fontWeight: 600, color: '#3f3f3f', marginBottom: 8 }}>👤 ウォッチ中（業界を動かす人・メディア／検証済み）</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   {watch.map((w, i) => (
@@ -260,28 +322,7 @@ export default function BrainPage() {
                     </div>
                   ))}
                 </div>
-                <div style={{ fontSize: 11, color: '#a9a9a9', marginTop: 8, lineHeight: 1.5 }}>※ 日々の投稿は上のリンクから手動フォロー（X等は自動取得できないため）。ニュースでの言及は下の新着に自動で出ます。</div>
-              </div>
-            )}
-
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: '#3f3f3f', marginBottom: 8 }}>📰 新着ニュース</div>
-            {feed.length === 0 ? (
-              <div style={{ fontSize: 13, color: '#9a9a9a', padding: '14px 0', lineHeight: 1.6 }}>まだ新着はありません。「今すぐ拾う」で最新ニュースを集めます。</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {feed.map((f, i) => (
-                  <div key={f.id || i} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.08)', borderRadius: 8, padding: '10px 12px' }}>
-                    <div style={{ display: 'flex', gap: 7, alignItems: 'baseline' }}>
-                      <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: badgeColor(f.verdict) }}>{f.badge || ''}</span>
-                      <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.45 }}>{f.oneLine || f.title}</span>
-                    </div>
-                    {f.soWhat && <div style={{ fontSize: 12.5, color: '#5a5a5a', marginTop: 3, lineHeight: 1.5 }}>→ {f.soWhat}</div>}
-                    <div style={{ fontSize: 10.5, color: '#a9a9a9', marginTop: 5, display: 'flex', gap: 8 }}>
-                      {f.source && <span>{f.source}</span>}
-                      {f.link && <a href={f.link} target="_blank" rel="noopener noreferrer" style={{ color: '#7a8cff' }}>元記事</a>}
-                    </div>
-                  </div>
-                ))}
+                <div style={{ fontSize: 11, color: '#a9a9a9', marginTop: 8, lineHeight: 1.5 }}>※ 日々の投稿は上のリンクから手動フォロー（X等は自動取得できないため）。</div>
               </div>
             )}
           </>

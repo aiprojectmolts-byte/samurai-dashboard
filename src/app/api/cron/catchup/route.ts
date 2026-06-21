@@ -110,6 +110,25 @@ export async function GET(request: Request) {
     await redis.set(SEEN, [...fresh.map(f => f.title), ...seen].slice(0, 800))
     await pushLog({ at: now.toISOString(), scanned: items.length, added: added.length })
 
+    // 「⚡30秒キャッチアップ」要点を生成（現在のフィード上位を最大3つに束ねる＝毎回最新の要約）
+    const combinedTop = [...added, ...existing].filter((x: any) => x && x.verdict !== 'none').slice(0, 12)
+    if (combinedTop.length > 0) {
+      try {
+        const sres = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001', max_tokens: 500,
+            system: '次は最近拾った業界・競合ニュースの一覧。自社マーケ担当が30秒で掴めるよう「最近の動き」を最大3つに束ねて。各行「- 」始まり、見出し・前置きなし。各行は「何が起きたか＋SAMURAIにどう効くか」をセットで一言。創作せず一覧の事実だけ。',
+            messages: [{ role: 'user', content: combinedTop.map((a: any) => `[${a.badge}] ${a.oneLine}（${a.soWhat || ''}）`).join('\n').slice(0, 8000) }],
+          }),
+        })
+        const sd = await sres.json()
+        const stext = sd.content?.find((c: any) => c.type === 'text')?.text?.trim() || ''
+        if (stext) await redis.set('samurai:brain-catch-summary', { text: stext, count: added.length, updatedAt: now.toISOString() })
+      } catch { /* 要約は任意 */ }
+    }
+
     return NextResponse.json({ added: added.length, scanned: items.length, items: added })
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 })
