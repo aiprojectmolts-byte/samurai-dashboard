@@ -24,6 +24,7 @@ function format(text: string): string {
   return esc
     .replace(/^### (.+)$/gm, '<div style="font-weight:600;font-size:14px;margin:12px 0 4px">$1</div>')
     .replace(/^## (.+)$/gm, '<div style="font-weight:600;font-size:15px;margin:14px 0 5px">$1</div>')
+    .replace(/^# (.+)$/gm, '<div style="font-weight:600;font-size:12px;margin:6px 0 4px;color:#6b6b6b">$1</div>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/^[-・*] (.+)$/gm, '<div style="display:flex;gap:6px;margin:3px 0"><span style="color:#9a9a9a">•</span><span>$1</span></div>')
     .replace(/\n/g, '<br/>')
