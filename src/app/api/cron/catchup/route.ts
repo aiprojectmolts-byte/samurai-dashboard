@@ -21,11 +21,14 @@ const LOG = 'samurai:brain-runs'
 
 const norm = (s: string) => (s || '').toLowerCase().replace(/[\s　・|｜\-—–、。．,.()（）\[\]「」【】]/g, '')
 
-const SYSTEM = `あなたはSAMURAI ARCHITECTS（建築×AI。プロダクト=Rendery[AI建築パース]/knock knock AI[空室にAI家具配置]/VISIOAL[企画ビジュアル]/カスタム[BIM化等の受託]）の情報キャッチアップ係です。
-以下は業界・競合ニュースの「見出し」リスト（本文は未取得）。各見出しを、建築もマーケも初心者の自社担当者に向けて、次のJSONオブジェクトに変換してください。JSON配列だけを返す（説明・コードフェンス禁止）。
-{"idx": 元番号, "oneLine": "それが何か中学生にも分かる一言", "verdict": "competitor|threat|tailwind|research|none のいずれか", "soWhat": "自社マーケ/営業にどう効くか1文。効かないなら『今は気にしなくてOK』"}
-判定の意味: competitor=直接競合の動き / threat=汎用AIや価格破壊など脅威 / tailwind=追い風(制度・需要・調査) / research=学術・研究でまだ実務に遠い / none=ほぼ無関係。
-本文が無いので断定や数字の創作はしない。不確実は遠慮なく none/research 寄りに。`
+const SYSTEM = `あなたはSAMURAI ARCHITECTS の情報キャッチアップ係です。SAMURAIのプロダクト=Rendery(AI建築パース/レンダリング生成)・knock knock AI(空室のバーチャルステージング)・VISIOAL(企画段階の空間ビジュアル)・カスタム(図面のBIM化・図面解析の受託)。
+【SAMURAIのレーン】＝①建築パース/レンダリング生成 ②バーチャルステージング ③企画ビジュアル ④図面→BIM化/図面解析、および「その直接・隣接競合」「業界の制度(BIM審査/2024年問題/補助金/i-Construction)」「顧客(工務店/不動産仲介/デベロッパー/大手建設)の動向」。これ以外はレーン外。
+
+以下は業界ニュースの「見出し」リスト(本文未取得)。各見出しを次のJSONに変換し、JSON配列だけ返す(説明・コードフェンス禁止)。
+{"idx":元番号,"oneLine":"中学生にも分かる一言","verdict":"competitor|threat|tailwind|research|none","soWhat":"自社マーケ/営業にどう効くか1文(noneなら空でよい)"}
+判定: competitor=パース/ステージング/企画ビジュアル/BIM受託の直接・隣接競合の動き / threat=汎用AI・価格破壊などの脅威 / tailwind=自社に効く制度・需要・調査データ / research=学術・研究でまだ実務に遠い / none=レーン外。
+【必ずnoneにする】単体の施工管理ツール・測位/位置管理・3Dプリンター建築・一般の啓発講演や教育講座・CG技術者向けのイベント/ワークショップ告知・アート/復元など、SAMURAIの4製品と直接関係しない話題。重複・ほぼ同内容も none。迷ったら none。
+本文が無いので断定や数字の創作はしない。`
 
 const EMOJI: Record<string, string> = { competitor: '🔴競合', threat: '⚠️脅威', tailwind: '🟢追い風', research: '🎓研究', none: '⚪無関係' }
 
@@ -100,7 +103,7 @@ export async function GET(request: Request) {
         text: `[${badge}] ${src.title}（${src.source || '媒体不明'}）: ${oneLine} → ${soWhat}`,
         createdAt: now.toISOString(),
       }
-    }).filter(Boolean)
+    }).filter((x: any) => x && x.verdict !== 'none') // 無関係はフィードに入れない（AIの判定をフィルターに使う）
 
     const existing: any[] = ((await redis.get(FEED)) as any[]) || []
     await redis.set(FEED, [...added, ...existing].slice(0, 60))

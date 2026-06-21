@@ -6,7 +6,16 @@ const redis = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL!, token: proce
 
 export async function GET() {
   try {
-    const feed = (await redis.get<any[]>('samurai:brain-feed')) || []
+    const raw = (await redis.get<any[]>('samurai:brain-feed')) || []
+    // 既存フィードも掃除：無関係(none)を隠し、ほぼ同内容の重複を1件に
+    const seen = new Set<string>()
+    const feed = raw
+      .filter(f => f && f.verdict !== 'none')
+      .filter(f => {
+        const k = (f.oneLine || f.title || '').slice(0, 22)
+        if (!k || seen.has(k)) return false
+        seen.add(k); return true
+      })
     return NextResponse.json({ feed })
   } catch {
     return NextResponse.json({ feed: [] })
