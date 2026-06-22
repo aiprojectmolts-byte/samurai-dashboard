@@ -26,8 +26,9 @@ export interface TrendGroup { keyword: string; items: TrendNewsItem[]; error?: s
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
-export async function fetchKeywordNews(keyword: string, n = 3): Promise<TrendGroup> {
-  const q = encodeURIComponent(keyword)
+export async function fetchKeywordNews(keyword: string, n = 3, withinDays = 14): Promise<TrendGroup> {
+  // when:Nd で「直近N日」に限定。Google News は既定だと関連度順で、古いセミナー告知などが混ざるため。
+  const q = encodeURIComponent(`${keyword} when:${withinDays}d`)
   const url = `https://news.google.com/rss/search?q=${q}&hl=ja&gl=JP&ceid=JP:ja`
   try {
     const res = await fetch(url, {
@@ -40,16 +41,25 @@ export async function fetchKeywordNews(keyword: string, n = 3): Promise<TrendGro
     })
     if (!res.ok) return { keyword, items: [], error: `HTTP ${res.status}` }
     const xml = await res.text()
-    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, n).map(m => {
-      const item = m[1]
-      return {
-        title: item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] ||
-               item.match(/<title>(.*?)<\/title>/)?.[1] || '',
-        link: item.match(/<link>(.*?)<\/link>/)?.[1] || '',
-        pubDate: item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || '',
-        source: item.match(/<source[^>]*>(.*?)<\/source>/)?.[1] || '',
-      }
-    })
+    const cutoff = Date.now() - withinDays * 86400000
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)]
+      .map(m => {
+        const item = m[1]
+        const pubDate = item.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || ''
+        return {
+          title: item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] ||
+                 item.match(/<title>(.*?)<\/title>/)?.[1] || '',
+          link: item.match(/<link>(.*?)<\/link>/)?.[1] || '',
+          pubDate,
+          source: item.match(/<source[^>]*>(.*?)<\/source>/)?.[1] || '',
+          _ts: Date.parse(pubDate) || 0,
+        }
+      })
+      // 古い記事を弾く（日付不明は when: で既に絞り込み済として残す）→ 新しい順 → 上位n件
+      .filter(i => i.title && (i._ts === 0 || i._ts >= cutoff))
+      .sort((a, b) => b._ts - a._ts)
+      .slice(0, n)
+      .map(({ _ts, ...rest }) => rest)
     return { keyword, items }
   } catch (e) {
     return { keyword, items: [], error: String(e) }

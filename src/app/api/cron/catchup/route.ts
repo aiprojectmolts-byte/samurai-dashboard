@@ -27,7 +27,7 @@ const SYSTEM = `あなたはSAMURAI ARCHITECTS の情報キャッチアップ係
 以下は業界ニュースの「見出し」リスト(本文未取得)。各見出しを次のJSONに変換し、JSON配列だけ返す(説明・コードフェンス禁止)。
 {"idx":元番号,"oneLine":"中学生にも分かる一言","verdict":"competitor|threat|tailwind|research|none","soWhat":"自社マーケ/営業にどう効くか1文(noneなら空でよい)"}
 判定: competitor=パース/ステージング/企画ビジュアル/BIM受託の直接・隣接競合の動き / threat=汎用AI・価格破壊などの脅威 / tailwind=自社に効く制度・需要・調査データ / research=学術・研究でまだ実務に遠い / none=レーン外。
-【必ずnoneにする】単体の施工管理ツール・測位/位置管理・3Dプリンター建築・一般の啓発講演や教育講座・CG技術者向けのイベント/ワークショップ告知・アート/復元など、SAMURAIの4製品と直接関係しない話題。重複・ほぼ同内容も none。迷ったら none。
+【必ずnoneにする】セミナー/ウェビナー/講座/イベント/展示会の【開催告知・参加者募集】（内容がレーン内でも、一過性の告知は戦況に効かないため none）・単体の施工管理ツール・測位/位置管理・3Dプリンター建築・一般の啓発講演や教育講座・CG技術者向けのワークショップ告知・アート/復元など、SAMURAIの4製品と直接関係しない話題。重複・ほぼ同内容も none。迷ったら none。
 本文が無いので断定や数字の創作はしない。`
 
 const EMOJI: Record<string, string> = { competitor: '🔴競合', threat: '⚠️脅威', tailwind: '🟢追い風', research: '🎓研究', none: '⚪無関係' }
@@ -40,16 +40,18 @@ export async function GET(request: Request) {
   }
   const url = new URL(request.url)
   const limit = Math.min(12, Math.max(1, Number(url.searchParams.get('limit')) || 8))
+  // reset=1 で古い溜まり（pubDate が無い旧データ等）を一掃してクリーンに拾い直す
+  const reset = url.searchParams.get('reset') === '1'
 
   try {
-    // 通常の業界ニュース＋ウォッチ中の人/企業のニュースを合わせて拾う
+    // 通常の業界ニュース＋ウォッチ中の人/企業のニュースを合わせて拾う（いずれも直近のみ）
     const [base, watchGroups] = await Promise.all([
-      fetchTrendItemsFlat(3),
-      Promise.all(WATCH.filter(w => w.news).map(w => fetchKeywordNews(w.news, 2))),
+      fetchTrendItemsFlat(3),                                  // 直近14日
+      Promise.all(WATCH.filter(w => w.news).map(w => fetchKeywordNews(w.news, 2, 30))), // 人/企業は直近30日
     ])
     const watchItems = watchGroups.flatMap(g => g.items.filter(i => i.title).map(i => ({ ...i, keyword: g.keyword })))
     const items = [...base, ...watchItems]
-    const seen: string[] = ((await redis.get(SEEN)) as string[]) || []
+    const seen: string[] = reset ? [] : (((await redis.get(SEEN)) as string[]) || [])
     const seenSet = new Set(seen.map(norm))
 
     const fresh: typeof items = []
@@ -98,6 +100,7 @@ export async function GET(request: Request) {
         link: src.link || '',
         source: src.source || '',
         keyword: src.keyword || '',
+        pubDate: src.pubDate || '',
         verdict, badge, oneLine, soWhat,
         // 脳(/api/brain)が読む用の1行サマリ
         text: `[${badge}] ${src.title}（${src.source || '媒体不明'}）: ${oneLine} → ${soWhat}`,
@@ -105,7 +108,7 @@ export async function GET(request: Request) {
       }
     }).filter((x: any) => x && x.verdict !== 'none') // 無関係はフィードに入れない（AIの判定をフィルターに使う）
 
-    const existing: any[] = ((await redis.get(FEED)) as any[]) || []
+    const existing: any[] = reset ? [] : (((await redis.get(FEED)) as any[]) || [])
     await redis.set(FEED, [...added, ...existing].slice(0, 60))
     await redis.set(SEEN, [...fresh.map(f => f.title), ...seen].slice(0, 800))
     await pushLog({ at: now.toISOString(), scanned: items.length, added: added.length })

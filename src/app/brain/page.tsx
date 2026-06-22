@@ -173,6 +173,13 @@ export default function BrainPage() {
 
   const isNew = (f: any) => { try { return !!(f?.createdAt && new Date(f.createdAt).getTime() > newCutoff) } catch { return false } }
   const newCount = feed.filter(isNew).length
+  // 記事の公開日を「何日前」で表示（新しさを一目で）
+  const fmtAgo = (s: string) => {
+    try { const t = new Date(s).getTime(); if (!t) return ''
+      const d = Math.floor((Date.now() - t) / 86400000)
+      if (d <= 0) return '今日'; if (d === 1) return '昨日'; if (d < 14) return `${d}日前`
+      const dt = new Date(t); return `${dt.getMonth() + 1}/${dt.getDate()}` } catch { return '' }
+  }
 
   // キャッチアップのニュースを兄さんに渡す（読む→動くに繋ぐ）
   const fromFeed = (f: any, mode: 'ask' | 'make') => {
@@ -527,6 +534,7 @@ export default function BrainPage() {
                     </div>
                     {f.soWhat && <div style={{ fontSize: 12.5, color: '#5a5a5a', marginTop: 3, lineHeight: 1.5 }}>→ {f.soWhat}</div>}
                     <div style={{ fontSize: 10.5, color: '#a9a9a9', marginTop: 6, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {f.pubDate && fmtAgo(f.pubDate) && <span style={{ color: '#8a8a8a', fontWeight: 600 }}>🕘 {fmtAgo(f.pubDate)}</span>}
                       {f.source && <span>{f.source}</span>}
                       {f.link && <a href={f.link} target="_blank" rel="noopener noreferrer" style={{ color: '#7a8cff' }}>元記事</a>}
                       <button onClick={() => fromFeed(f, 'ask')} style={{ fontSize: 10.5, color: '#3f3f3f', background: 'none', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>🧠 兄さんに聞く</button>
