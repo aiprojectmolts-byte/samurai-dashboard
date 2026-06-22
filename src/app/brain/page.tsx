@@ -54,6 +54,18 @@ function badgeColor(v: string): string {
   return ({ competitor: '#c0392b', threat: '#d35400', tailwind: '#1e7e34', research: '#6b5bd2', event: '#2a6fb0', none: '#9a9a9a' } as Record<string, string>)[v] || '#9a9a9a'
 }
 
+// VTT(字幕/文字起こし)を、タイムスタンプ・連番・タグを落としてプレーンな会話テキストにする
+function parseVtt(raw: string): string {
+  return raw.split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l && l !== 'WEBVTT' && !/-->/.test(l) && !/^\d+$/.test(l)
+      && !/^NOTE/i.test(l) && !/^STYLE/i.test(l) && !/^(Kind|Language):/i.test(l))
+    .map(l => l.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').trim())
+    .filter(Boolean)
+    .filter((l, i, arr) => l !== arr[i - 1]) // 連続重複（自動字幕の被り）を除去
+    .join('\n')
+}
+
 // モデル出力を安全に整形（HTMLエスケープ→markdown-lite）
 function format(text: string): string {
   const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -72,7 +84,7 @@ function fmtDate(t: number): string {
 }
 
 export default function BrainPage() {
-  const [tab, setTab] = useState<'today' | 'learn' | 'ani' | 'catch' | 'battle'>('today')
+  const [tab, setTab] = useState<'today' | 'learn' | 'ani' | 'catch' | 'meeting' | 'battle'>('today')
   const [learned, setLearned] = useState<string[]>([])
   const [input, setInput] = useState('')
   const [convos, setConvos] = useState<Convo[]>([])
@@ -89,6 +101,10 @@ export default function BrainPage() {
   const [cmdkQuery, setCmdkQuery] = useState('')
   const [sel, setSel] = useState<{ text: string; x: number; y: number } | null>(null)
   const [term, setTerm] = useState<{ q: string; a: string; loading: boolean } | null>(null)
+  const [meetings, setMeetings] = useState<any[]>([])
+  const [mtgBusy, setMtgBusy] = useState(false)
+  const [mtgErr, setMtgErr] = useState('')
+  const [openMtg, setOpenMtg] = useState<string>('')
   const taRef = useRef<HTMLTextAreaElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -107,6 +123,7 @@ export default function BrainPage() {
     loadFeed()
     loadWatch()
     loadCards()
+    loadMeetings()
     taRef.current?.focus()
   }, [])
 
@@ -146,6 +163,30 @@ export default function BrainPage() {
   }
   const loadCards = async () => {
     try { const r = await fetch('/api/brain-battlecards'); const d = await r.json(); setCards(Array.isArray(d.cards) ? d.cards : []) } catch { /* noop */ }
+  }
+  const loadMeetings = async () => {
+    try { const r = await fetch('/api/brain-meeting'); const d = await r.json(); setMeetings(Array.isArray(d.meetings) ? d.meetings : []) } catch { /* noop */ }
+  }
+  // VTTファイルを受け取り→整形→ダイジェスト化（兄さんがやってくれる）
+  const onVttFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (e.target) e.target.value = ''
+    if (!file) return
+    setMtgErr(''); setMtgBusy(true)
+    try {
+      const transcript = parseVtt(await file.text())
+      if (transcript.length < 40) { setMtgErr('文字起こしを読み取れませんでした（.vttファイルか確認してね）'); setMtgBusy(false); return }
+      const r = await fetch('/api/brain-meeting', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript, name: file.name }) })
+      const d = await r.json()
+      if (!r.ok || d.error) { setMtgErr(d.error || '処理に失敗しました'); setMtgBusy(false); return }
+      await loadMeetings()
+      setOpenMtg(d.meeting?.id || '')
+    } catch (err) { setMtgErr(String(err)) }
+    setMtgBusy(false)
+  }
+  // 定例を兄さんに渡して深掘り
+  const askMeeting = (m: any) => {
+    setInput(`さっきのマーケ定例「${m.title}」について深掘りしたい。\n要点：${m.summary}\n決まったこと：${(m.decisions || []).join(' ｜ ')}`)
+    setTab('ani'); setTimeout(() => taRef.current?.focus(), 60)
   }
 
   // 開いている会話を記憶（ハードリロードで消えないように）
@@ -234,6 +275,7 @@ export default function BrainPage() {
       { label: '📚 学ぶ（基礎固め）へ', run: () => { setTab('learn'); setCmdkOpen(false) } },
       { label: '🧠 兄さんへ', run: () => { setTab('ani'); setCmdkOpen(false) } },
       { label: '🐣 新着へ', run: () => { setTab('catch'); setCmdkOpen(false) } },
+      { label: '📋 定例へ', run: () => { setTab('meeting'); setCmdkOpen(false) } },
       { label: '⚔️ 競合へ', run: () => { setTab('battle'); setCmdkOpen(false) } },
       { label: '＋ 新しい会話', run: () => { newConvo(); setTab('ani'); setCmdkOpen(false) } },
       { label: '🔄 今すぐ拾う', run: () => { setCmdkOpen(false); runCatchup() } },
@@ -274,7 +316,7 @@ export default function BrainPage() {
     setLoading(false)
   }
 
-  const tabBtn = (key: 'today' | 'learn' | 'ani' | 'catch' | 'battle', label: string) => (
+  const tabBtn = (key: 'today' | 'learn' | 'ani' | 'catch' | 'meeting' | 'battle', label: string) => (
     <button onClick={() => setTab(key)}
       style={{ flex: 1, padding: '9px 2px', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', border: 'none', borderBottom: tab === key ? '2px solid #0f0f0f' : '2px solid transparent', background: 'none', color: tab === key ? '#0f0f0f' : '#9a9a9a', whiteSpace: 'nowrap' }}>
       {label}
@@ -292,6 +334,7 @@ export default function BrainPage() {
           {tabBtn('learn', '📚学ぶ')}
           {tabBtn('ani', '🧠兄さん')}
           {tabBtn('catch', `🐣新着${feed.length ? `(${feed.length})` : ''}`)}
+          {tabBtn('meeting', '📋定例')}
           {tabBtn('battle', '⚔️競合')}
         </div>
 
@@ -570,6 +613,77 @@ export default function BrainPage() {
                   ))}
                 </div>
                 <div style={{ fontSize: 11, color: '#a9a9a9', marginTop: 8, lineHeight: 1.5 }}>※ 日々の投稿は上のリンクから手動フォロー（X等は自動取得できないため）。</div>
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === 'meeting' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 10 }}>
+              <div style={{ fontSize: 12.5, color: '#6b6b6b', lineHeight: 1.6 }}>マーケ定例の文字起こし（.vtt）をアップ → 兄さんが要点に噛み砕きます。</div>
+              <label style={{ flexShrink: 0, fontSize: 12, padding: '6px 12px', background: mtgBusy ? '#f1f1f1' : '#0f0f0f', color: mtgBusy ? '#9a9a9a' : '#fff', border: 'none', borderRadius: 14, cursor: mtgBusy ? 'default' : 'pointer', fontWeight: 600 }}>
+                {mtgBusy ? '読んでます…' : '📤 VTTをアップ'}
+                <input type="file" accept=".vtt,text/vtt" onChange={onVttFile} disabled={mtgBusy} style={{ display: 'none' }} />
+              </label>
+            </div>
+            {mtgErr && <div style={{ fontSize: 12, color: '#c0392b', background: '#fdecea', borderRadius: 8, padding: '8px 10px', marginBottom: 12 }}>{mtgErr}</div>}
+            {mtgBusy && <div style={{ fontSize: 12.5, color: '#6b6b6b', padding: '10px 0' }}>🧠 兄さんが定例を読んで、30秒サマリー・決まったこと・あなたのやること…に整理しています（30秒ほど）。</div>}
+
+            {meetings.length === 0 && !mtgBusy ? (
+              <div style={{ fontSize: 13, color: '#7a7a7a', lineHeight: 1.8, background: '#fff', border: '0.5px solid rgba(0,0,0,0.08)', borderRadius: 10, padding: '14px 16px' }}>
+                まだ定例はありません。<br />Zoom/Teams/Google Meet の文字起こしを <b>.vtt</b> で書き出して、上の「📤 VTTをアップ」から入れてください。<br /><span style={{ color: '#a0a0a0' }}>※ 字幕(キャプション)の保存 / トランスクリプトのダウンロードで .vtt が手に入ります。</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {meetings.map((m: any, i: number) => {
+                  const open = openMtg ? openMtg === m.id : i === 0
+                  const list = (emoji: string, label: string, items: string[], color: string) => (Array.isArray(items) && items.length > 0) ? (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: 5 }}>{emoji} {label}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        {items.map((x, j) => <div key={j} style={{ fontSize: 13, lineHeight: 1.55, color: '#2a2a2a', paddingLeft: 14, position: 'relative' }}><span style={{ position: 'absolute', left: 2, color }}>•</span>{x}</div>)}
+                      </div>
+                    </div>
+                  ) : null
+                  return (
+                    <div key={m.id} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 10, padding: '13px 15px' }}>
+                      <div onClick={() => setOpenMtg(open ? '___' : m.id)} style={{ display: 'flex', alignItems: 'baseline', gap: 8, cursor: 'pointer', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 10.5, color: '#a9a9a9' }}>{(m.createdAt || '').slice(5, 10)}</span>
+                        <span style={{ fontSize: 14.5, fontWeight: 700, flex: 1 }}>{m.title}</span>
+                        <span style={{ fontSize: 11, color: '#9a9a9a' }}>{open ? '▲' : '▼'}</span>
+                      </div>
+                      {open && (
+                        <>
+                          {m.summary && <div style={{ fontSize: 13, lineHeight: 1.7, color: '#1f1f1f', marginTop: 8, background: '#faf9f7', borderRadius: 8, padding: '10px 12px' }}>⚡ {m.summary}</div>}
+                          {list('✅', '決まったこと', m.decisions, '#1e7e34')}
+                          {Array.isArray(m.myActions) && m.myActions.length > 0 && (
+                            <div style={{ marginTop: 12, background: '#fff7ed', border: '0.5px solid rgba(217,119,6,0.3)', borderRadius: 8, padding: '10px 12px' }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: '#b45309', marginBottom: 5 }}>📌 あなたがやること・関わること</div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                {m.myActions.map((x: string, j: number) => <div key={j} style={{ fontSize: 13, lineHeight: 1.55, color: '#2a2a2a', paddingLeft: 14, position: 'relative' }}><span style={{ position: 'absolute', left: 2, color: '#b45309' }}>•</span>{x}</div>)}
+                              </div>
+                            </div>
+                          )}
+                          {Array.isArray(m.terms) && m.terms.length > 0 && (
+                            <div style={{ marginTop: 12 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: '#2a6fb0', marginBottom: 5 }}>🔑 出てきた言葉</div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                                {m.terms.map((t: any, j: number) => <div key={j} style={{ fontSize: 12.5, lineHeight: 1.55, color: '#3a3a3a' }}><b>{t.term}</b>：{t.plain}</div>)}
+                              </div>
+                            </div>
+                          )}
+                          {list('❓', '確認したほうがいいこと', m.checks, '#8a6d3b')}
+                          {m.soWhat && <div style={{ fontSize: 12.5, color: '#444', marginTop: 12, lineHeight: 1.6, borderLeft: '2px solid #e2e0da', paddingLeft: 10 }}>→ SAMURAIマーケへの意味：{m.soWhat}</div>}
+                          {m.truncated && <div style={{ fontSize: 10.5, color: '#a9a9a9', marginTop: 8 }}>※ 文字起こしが長いため一部のみ要約しています。</div>}
+                          <div style={{ marginTop: 12 }}>
+                            <button onClick={() => askMeeting(m)} style={{ fontSize: 11.5, color: '#fff', background: '#0f0f0f', border: 'none', borderRadius: 12, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>🧠 兄さんに深掘り</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </>

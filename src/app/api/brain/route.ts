@@ -189,6 +189,21 @@ export async function POST(request: Request) {
       }
     } catch { /* feedは任意。失敗しても無視 */ }
 
+    // マーケ定例のダイジェスト（VTTアップから生成）。直近2件を記憶に足す＝「あの定例で〜」に答えられる。
+    let meetingBlock = ''
+    try {
+      const mtgs = redis ? await redis.get<any[]>('samurai:brain-meetings') : null
+      if (Array.isArray(mtgs) && mtgs.length) {
+        meetingBlock = `\n\n# 最近のマーケ定例（議事録ダイジェスト・直近${Math.min(2, mtgs.length)}件）\n` +
+          mtgs.slice(0, 2).map((m: any) => {
+            const d = (m.createdAt || '').slice(0, 10)
+            const dec = (m.decisions || []).slice(0, 6).map((x: string) => `・${x}`).join('\n')
+            const act = (m.myActions || []).slice(0, 6).map((x: string) => `・${x}`).join('\n')
+            return `## ${d} ${m.title}\n概要: ${m.summary}\n決まったこと:\n${dec}\nあなた(マーケ担当)のやること:\n${act}`
+          }).join('\n\n')
+      }
+    } catch { /* 定例は任意 */ }
+
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -199,7 +214,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 2000,
-        system: SYSTEM + briefBlock + feedBlock,
+        system: SYSTEM + briefBlock + feedBlock + meetingBlock,
         messages,
       }),
     })
