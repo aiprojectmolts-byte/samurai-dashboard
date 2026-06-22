@@ -87,16 +87,33 @@ const redis = (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_R
 // 兄さんが「URLを読める」ように：ページ本文をテキスト抽出（/api/scrape と同じ方式）
 async function fetchPageText(url: string): Promise<string> {
   try {
-    const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; bot)' }, signal: AbortSignal.timeout(12000) })
+    // 実ブラウザのUAで取りに行く（"bot"入りUAは多くのサイト/データセンターIPで弾かれるため）
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(12000),
+    })
     if (!r.ok) return ''
     const html = await r.text()
-    return html
+    // メタ情報(og:title/og:description/title/description)を先に拾う＝JSレンダリングや本文が薄いページでも要点は渡せる
+    const metaContent = (key: string, attr: 'property' | 'name') => {
+      const tag = html.match(new RegExp(`<meta[^>]*\\b${attr}=["']${key}["'][^>]*>`, 'i'))?.[0] || ''
+      return tag.match(/\bcontent=["']([^"']*)["']/i)?.[1]?.trim() || ''
+    }
+    const title = metaContent('og:title', 'property') || (html.match(/<title>([^<]+)<\/title>/i)?.[1]?.trim() || '')
+    const desc = metaContent('og:description', 'property') || metaContent('description', 'name')
+    const body = html
       .replace(/<script[\s\S]*?<\/script>/gi, '')
       .replace(/<style[\s\S]*?<\/style>/gi, '')
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, 5000)
+    const head = [title && `タイトル: ${title}`, desc && `概要: ${desc}`].filter(Boolean).join('\n')
+    return ((head ? head + '\n\n' : '') + body).slice(0, 6000).trim()
   } catch { return '' }
 }
 
