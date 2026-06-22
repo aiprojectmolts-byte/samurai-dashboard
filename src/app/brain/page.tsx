@@ -51,7 +51,7 @@ type QA = { q: string; a: string; sources?: string[]; loading?: boolean; error?:
 type Convo = { id: string; title: string; turns: QA[]; updatedAt: number }
 
 function badgeColor(v: string): string {
-  return ({ competitor: '#c0392b', threat: '#d35400', tailwind: '#1e7e34', research: '#6b5bd2', none: '#9a9a9a' } as Record<string, string>)[v] || '#9a9a9a'
+  return ({ competitor: '#c0392b', threat: '#d35400', tailwind: '#1e7e34', research: '#6b5bd2', event: '#2a6fb0', none: '#9a9a9a' } as Record<string, string>)[v] || '#9a9a9a'
 }
 
 // モデル出力を安全に整形（HTMLエスケープ→markdown-lite）
@@ -193,7 +193,7 @@ export default function BrainPage() {
   }
 
   // 「今日」タブ用：重要度順 上位3件
-  const VPRI: Record<string, number> = { competitor: 0, threat: 1, tailwind: 2, research: 3, none: 9 }
+  const VPRI: Record<string, number> = { competitor: 0, threat: 1, event: 2, tailwind: 3, research: 4, none: 9 }
   const today3 = [...feed]
     .sort((a: any, b: any) => ((isNew(b) ? 1 : 0) - (isNew(a) ? 1 : 0)) || ((VPRI[a.verdict] ?? 5) - (VPRI[b.verdict] ?? 5)))
     .slice(0, 3)
@@ -317,6 +317,7 @@ export default function BrainPage() {
                       </div>
                       {f.soWhat && <div style={{ fontSize: 12.5, color: '#444', marginTop: 4, lineHeight: 1.55, borderLeft: '2px solid #e2e0da', paddingLeft: 8 }}>{f.soWhat}</div>}
                       <div style={{ fontSize: 10.5, color: '#a9a9a9', marginTop: 6, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                        {f.verdict === 'event' && f.eventDate && <span style={{ color: '#2a6fb0', fontWeight: 700 }}>📅 {f.eventDate} 開催</span>}
                         {f.source && <span>{f.source}</span>}
                         {f.link && <a href={f.link} target="_blank" rel="noopener noreferrer" style={{ color: '#7a8cff' }}>元記事</a>}
                         <button onClick={() => fromFeed(f, 'ask')} style={{ fontSize: 10.5, color: '#3f3f3f', background: 'none', border: '0.5px solid rgba(0,0,0,0.15)', borderRadius: 10, padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>🧠 深掘り</button>
@@ -534,6 +535,7 @@ export default function BrainPage() {
                     </div>
                     {f.soWhat && <div style={{ fontSize: 12.5, color: '#5a5a5a', marginTop: 3, lineHeight: 1.5 }}>→ {f.soWhat}</div>}
                     <div style={{ fontSize: 10.5, color: '#a9a9a9', marginTop: 6, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {f.verdict === 'event' && f.eventDate && <span style={{ color: '#2a6fb0', fontWeight: 700 }}>📅 {f.eventDate} 開催</span>}
                       {f.pubDate && fmtAgo(f.pubDate) && <span style={{ color: '#8a8a8a', fontWeight: 600 }}>🕘 {fmtAgo(f.pubDate)}</span>}
                       {f.source && <span>{f.source}</span>}
                       {f.link && <a href={f.link} target="_blank" rel="noopener noreferrer" style={{ color: '#7a8cff' }}>元記事</a>}

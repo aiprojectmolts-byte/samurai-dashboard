@@ -21,16 +21,17 @@ const LOG = 'samurai:brain-runs'
 
 const norm = (s: string) => (s || '').toLowerCase().replace(/[\s　・|｜\-—–、。．,.()（）\[\]「」【】]/g, '')
 
-const SYSTEM = `あなたはSAMURAI ARCHITECTS の情報キャッチアップ係です。SAMURAIのプロダクト=Rendery(AI建築パース/レンダリング生成)・knock knock AI(空室のバーチャルステージング)・VISIOAL(企画段階の空間ビジュアル)・カスタム(図面のBIM化・図面解析の受託)。
+const buildSystem = (today: string) => `あなたはSAMURAI ARCHITECTS の情報キャッチアップ係です。今日は ${today} です。SAMURAIのプロダクト=Rendery(AI建築パース/レンダリング生成)・knock knock AI(空室のバーチャルステージング)・VISIOAL(企画段階の空間ビジュアル)・カスタム(図面のBIM化・図面解析の受託)。
 【SAMURAIのレーン】＝①建築パース/レンダリング生成 ②バーチャルステージング ③企画ビジュアル ④図面→BIM化/図面解析、および「その直接・隣接競合」「業界の制度(BIM審査/2024年問題/補助金/i-Construction)」「顧客(工務店/不動産仲介/デベロッパー/大手建設)の動向」。これ以外はレーン外。
 
 以下は業界ニュースの「見出し」リスト(本文未取得)。各見出しを次のJSONに変換し、JSON配列だけ返す(説明・コードフェンス禁止)。
-{"idx":元番号,"oneLine":"中学生にも分かる一言","verdict":"competitor|threat|tailwind|research|none","soWhat":"自社マーケ/営業にどう効くか1文(noneなら空でよい)"}
-判定: competitor=パース/ステージング/企画ビジュアル/BIM受託の直接・隣接競合の動き / threat=汎用AI・価格破壊などの脅威 / tailwind=自社に効く制度・需要・調査データ / research=学術・研究でまだ実務に遠い / none=レーン外。
-【必ずnoneにする】セミナー/ウェビナー/講座/イベント/展示会の【開催告知・参加者募集】（内容がレーン内でも、一過性の告知は戦況に効かないため none）・単体の施工管理ツール・測位/位置管理・3Dプリンター建築・一般の啓発講演や教育講座・CG技術者向けのワークショップ告知・アート/復元など、SAMURAIの4製品と直接関係しない話題。重複・ほぼ同内容も none。迷ったら none。
+{"idx":元番号,"oneLine":"中学生にも分かる一言","verdict":"competitor|threat|tailwind|research|event|none","soWhat":"自社マーケ/営業にどう効くか1文(noneなら空でよい)","eventDate":"verdict=event のときだけ開催日をM/D形式で(例:7/15)。それ以外は空"}
+判定: competitor=パース/ステージング/企画ビジュアル/BIM受託の直接・隣接競合の動き / threat=汎用AI・価格破壊などの脅威 / tailwind=自社に効く制度・需要・調査データ / research=学術・研究でまだ実務に遠い / event=レーン内のセミナー/イベント/ウェビナー/展示会で【開催日が今日(${today})より後＝これから開催】のもの(行けば情報が得られるので残す) / none=レーン外。
+【セミナー/イベントの扱い】開催日が今日(${today})より後で内容がレーン内なら verdict=event、eventDate に開催日(M/D)を入れる。開催日が過去・終了済み・日付がそもそも読み取れないものは none。
+【必ずnoneにする】単体の施工管理ツール・測位/位置管理・3Dプリンター建築・一般の啓発講演や教育講座・CG技術者向けのワークショップ告知・アート/復元など、SAMURAIの4製品と直接関係しない話題。重複・ほぼ同内容も none。迷ったら none。
 本文が無いので断定や数字の創作はしない。`
 
-const EMOJI: Record<string, string> = { competitor: '🔴競合', threat: '⚠️脅威', tailwind: '🟢追い風', research: '🎓研究', none: '⚪無関係' }
+const EMOJI: Record<string, string> = { competitor: '🔴競合', threat: '⚠️脅威', tailwind: '🟢追い風', research: '🎓研究', event: '📅イベント', none: '⚪無関係' }
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET
@@ -70,11 +71,12 @@ export async function GET(request: Request) {
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set' }, { status: 500 })
 
+    const todayStr = new Date().toISOString().slice(0, 10)
     const listText = fresh.map((it, i) => `${i}. 「${it.title}」（媒体: ${it.source || '不明'} / KW: ${it.keyword}）`).join('\n')
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 3000, system: SYSTEM, messages: [{ role: 'user', content: listText }] }),
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 3000, system: buildSystem(todayStr), messages: [{ role: 'user', content: listText }] }),
     })
     const data = await res.json()
     const raw = data.content?.find((c: any) => c.type === 'text')?.text || data.content?.[0]?.text || ''
@@ -94,6 +96,7 @@ export async function GET(request: Request) {
       const badge = EMOJI[verdict]
       const oneLine = j.oneLine || src.title
       const soWhat = j.soWhat || ''
+      const eventDate = verdict === 'event' ? String(j.eventDate || '').trim() : ''
       return {
         id: 'feed_' + now.getTime() + '_' + i + Math.random().toString(36).slice(2, 6),
         title: src.title,
@@ -101,9 +104,10 @@ export async function GET(request: Request) {
         source: src.source || '',
         keyword: src.keyword || '',
         pubDate: src.pubDate || '',
+        eventDate,
         verdict, badge, oneLine, soWhat,
         // 脳(/api/brain)が読む用の1行サマリ
-        text: `[${badge}] ${src.title}（${src.source || '媒体不明'}）: ${oneLine} → ${soWhat}`,
+        text: `[${badge}]${eventDate ? `(📅${eventDate}開催)` : ''} ${src.title}（${src.source || '媒体不明'}）: ${oneLine} → ${soWhat}`,
         createdAt: now.toISOString(),
       }
     }).filter((x: any) => x && x.verdict !== 'none') // 無関係はフィードに入れない（AIの判定をフィルターに使う）
