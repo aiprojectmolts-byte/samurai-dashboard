@@ -27,7 +27,7 @@ const buildSystem = (today: string) => `あなたはSAMURAI ARCHITECTS の情報
 以下は業界ニュースの「見出し」リスト(本文未取得)。各見出しを次のJSONに変換し、JSON配列だけ返す(説明・コードフェンス禁止)。
 {"idx":元番号,"oneLine":"中学生にも分かる一言","verdict":"competitor|threat|tailwind|research|event|none","soWhat":"自社マーケ/営業にどう効くか1文(noneなら空でよい)","eventDate":"verdict=event のときだけ開催日をM/D形式で(例:7/15)。それ以外は空"}
 判定: competitor=パース/ステージング/企画ビジュアル/BIM受託の直接・隣接競合の動き / threat=汎用AI・価格破壊などの脅威 / tailwind=自社に効く制度・需要・調査データ / research=学術・研究でまだ実務に遠い / event=レーン内のセミナー/イベント/ウェビナー/展示会で【開催日が今日(${today})より後＝これから開催】のもの(行けば情報が得られるので残す) / none=レーン外。
-【セミナー/イベントの扱い】開催日が今日(${today})より後で内容がレーン内なら verdict=event、eventDate に開催日(M/D)を入れる。開催日が過去・終了済み・日付がそもそも読み取れないものは none。
+【セミナー/イベントの扱い】開催日が今日(${today})より後で内容がレーン内なら verdict=event、eventDate に開催日(M/D)を入れる。開催日が過去・終了済み・見出しから開催日(M/D)が読み取れないものは必ず none（eventDate を空にするくらいなら event にしない）。
 【必ずnoneにする】単体の施工管理ツール・測位/位置管理・3Dプリンター建築・一般の啓発講演や教育講座・CG技術者向けのワークショップ告知・アート/復元など、SAMURAIの4製品と直接関係しない話題。重複・ほぼ同内容も none。迷ったら none。
 本文が無いので断定や数字の創作はしない。`
 
@@ -96,11 +96,13 @@ export async function GET(request: Request) {
     const added = judged.map((j: any, i: number) => {
       const src = fresh[typeof j.idx === 'number' ? j.idx : i] || fresh[i]
       if (!src) return null
-      const verdict = EMOJI[j.verdict] ? j.verdict : 'none'
+      let verdict = EMOJI[j.verdict] ? j.verdict : 'none'
+      const eventDate = verdict === 'event' ? String(j.eventDate || '').trim() : ''
+      // 開催日が取れない"セミナー告知"は、未来か過去か判断できないので残さない（ユーザー基準＝日程が未来のものだけ）
+      if (verdict === 'event' && !eventDate) verdict = 'none'
       const badge = EMOJI[verdict]
       const oneLine = j.oneLine || src.title
       const soWhat = j.soWhat || ''
-      const eventDate = verdict === 'event' ? String(j.eventDate || '').trim() : ''
       return {
         id: 'feed_' + now.getTime() + '_' + i + Math.random().toString(36).slice(2, 6),
         title: src.title,
