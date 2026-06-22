@@ -85,36 +85,54 @@ const redis = (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_R
   : null
 
 // 兄さんが「URLを読める」ように：ページ本文をテキスト抽出（/api/scrape と同じ方式）
-async function fetchPageText(url: string): Promise<string> {
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+function htmlToText(html: string): string {
+  // メタ情報(og:title/og:description/title/description)を先に拾う＝JSレンダリングや本文が薄いページでも要点は渡せる
+  const metaContent = (key: string, attr: 'property' | 'name') => {
+    const tag = html.match(new RegExp(`<meta[^>]*\\b${attr}=["']${key}["'][^>]*>`, 'i'))?.[0] || ''
+    return tag.match(/\bcontent=["']([^"']*)["']/i)?.[1]?.trim() || ''
+  }
+  const title = metaContent('og:title', 'property') || (html.match(/<title>([^<]+)<\/title>/i)?.[1]?.trim() || '')
+  const desc = metaContent('og:description', 'property') || metaContent('description', 'name')
+  const body = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const head = [title && `タイトル: ${title}`, desc && `概要: ${desc}`].filter(Boolean).join('\n')
+  return ((head ? head + '\n\n' : '') + body).slice(0, 6000).trim()
+}
+
+// 実ブラウザUAで直接取得（"bot"入りUAは多くのサイトで弾かれる）
+async function fetchDirect(url: string): Promise<string> {
   try {
-    // 実ブラウザのUAで取りに行く（"bot"入りUAは多くのサイト/データセンターIPで弾かれるため）
     const r = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
-      },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(12000),
+      headers: { 'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8' },
+      redirect: 'follow', signal: AbortSignal.timeout(12000),
     })
     if (!r.ok) return ''
-    const html = await r.text()
-    // メタ情報(og:title/og:description/title/description)を先に拾う＝JSレンダリングや本文が薄いページでも要点は渡せる
-    const metaContent = (key: string, attr: 'property' | 'name') => {
-      const tag = html.match(new RegExp(`<meta[^>]*\\b${attr}=["']${key}["'][^>]*>`, 'i'))?.[0] || ''
-      return tag.match(/\bcontent=["']([^"']*)["']/i)?.[1]?.trim() || ''
-    }
-    const title = metaContent('og:title', 'property') || (html.match(/<title>([^<]+)<\/title>/i)?.[1]?.trim() || '')
-    const desc = metaContent('og:description', 'property') || metaContent('description', 'name')
-    const body = html
-      .replace(/<script[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-    const head = [title && `タイトル: ${title}`, desc && `概要: ${desc}`].filter(Boolean).join('\n')
-    return ((head ? head + '\n\n' : '') + body).slice(0, 6000).trim()
+    return htmlToText(await r.text())
   } catch { return '' }
+}
+
+// フォールバック：リーダー経由（データセンターIPからの直アクセスを拒否するサイト向け）
+async function fetchViaReader(url: string): Promise<string> {
+  try {
+    const r = await fetch('https://r.jina.ai/' + url, { headers: { 'User-Agent': BROWSER_UA, 'Accept': 'text/plain' }, signal: AbortSignal.timeout(12000) })
+    if (!r.ok) return ''
+    const t = (await r.text()).trim()
+    if (/403\s*ERROR|could not be satisfied|Request blocked|Access Denied/i.test(t)) return ''
+    return t.slice(0, 6000)
+  } catch { return '' }
+}
+
+async function fetchPageText(url: string): Promise<string> {
+  const direct = await fetchDirect(url)
+  if (direct.length > 200) return direct
+  const reader = await fetchViaReader(url)
+  return reader || direct || ''
 }
 
 export async function POST(request: Request) {
@@ -146,9 +164,9 @@ export async function POST(request: Request) {
         sources = urls
         const pages = await Promise.all(urls.map(async (u: string) => {
           const t = await fetchPageText(u)
-          return t ? `■ ${u} の中身（抜粋）:\n${t}` : `■ ${u} は読めませんでした（ログイン必須/取得失敗の可能性）`
+          return t ? `■ ${u} の中身（抜粋）:\n${t}` : `■ ${u} は本文取得不可（サイト側がサーバーからのアクセスを拒否している可能性）`
         }))
-        lastUser.content = `${lastUser.content}\n\n----\n[システム補足：ユーザーが貼ったページを取得しました。下の"中身"を読んで答えてください。読めなかったものは正直にそう伝えて]\n${pages.join('\n\n')}`
+        lastUser.content = `${lastUser.content}\n\n----\n[システム補足：ユーザーが貼ったページの取得を試みた。読めたものは下の"中身"を使って答える。読めなかったものは、まず冒頭で一言だけ「本文は取れなかった（サイト側がサーバーからの取得をブロックしている）」と短く断った上で、★絶対に「コピペして」で済ませず★、ユーザーのメッセージにある見出し「」とあなたの知識・記憶のフィード要約から、『これは何の話か』と『SAMURAIにどう関係するか（競合/追い風/研究/無関係＋具体的な理由と次の一手）』を必ず具体的に答えること。本文がないと分からない細かい数字だけは、その旨を添える]\n${pages.join('\n\n')}`
       }
     }
 

@@ -184,10 +184,12 @@ export default function BrainPage() {
   // キャッチアップのニュースを兄さんに渡す（読む→動くに繋ぐ）
   const fromFeed = (f: any, mode: 'ask' | 'make') => {
     const head = f.oneLine || f.title || ''
+    const ctx = [f.badge, f.soWhat].filter(Boolean).join(' / ')   // 本文が読めなくても兄さんが答えられるよう判定の要点を同梱
+    const meta = ctx ? `\n（キャッチアップの見立て：${ctx}）` : ''
     const link = f.link ? `\n${f.link}` : ''
     setInput(mode === 'make'
-      ? `次のニュースを、SAMURAI向けに加藤さんの正直な文体でコンテンツの下書き（フック1行＋骨子）にして：\n「${head}」${link}`
-      : `次のニュース、SAMURAIにどう関係する？詳しく教えて：\n「${head}」${link}`)
+      ? `次のニュースを、SAMURAI向けに加藤さんの正直な文体でコンテンツの下書き（フック1行＋骨子）にして：\n「${head}」${meta}${link}`
+      : `次のニュース、SAMURAIにどう関係する？詳しく教えて：\n「${head}」${meta}${link}`)
     setTab('ani')
     setTimeout(() => taRef.current?.focus(), 60)
   }
