@@ -66,6 +66,36 @@ export async function fetchKeywordNews(keyword: string, n = 3, withinDays = 14):
   }
 }
 
+// Google News の中継URL（news.google.com/.../articles/CBMi...）を実記事URLに復元する。
+// これを挟まないと、中継ページ(JSアプリ)が返るだけで記事本文が取得できない（＝兄さんが「読めない」になる）。
+// 仕組み: 記事ページから署名(data-n-a-sg)と時刻(data-n-a-ts)を取り、Googleの batchexecute で実URLに復号する。
+export async function resolveGoogleNewsUrl(url: string): Promise<string> {
+  try {
+    if (!url || !url.includes('news.google.') || !url.includes('/articles/')) return url
+    const gid = url.match(/\/articles\/([^?/]+)/)?.[1]
+    if (!gid) return url
+    const page = await fetch(url, { headers: { 'User-Agent': UA }, redirect: 'follow', cache: 'no-store', signal: AbortSignal.timeout(8000) })
+    const html = await page.text()
+    const ts = html.match(/data-n-a-ts="([^"]+)"/)?.[1]
+    const sg = html.match(/data-n-a-sg="([^"]+)"/)?.[1]
+    if (!ts || !sg) return url
+    const inner = JSON.stringify(['garturlreq', [['X', 'X', ['X', 'X'], null, null, 1, 1, 'US:en', null, 1, null, null, null, null, null, 0, 1], 'X', 'X', 1, [1, 1, 1], 1, 1, null, 0, 0, null, 0], gid, Number(ts), sg])
+    const freq = JSON.stringify([[['Fbv4je', inner, null, '1']]])
+    const res = await fetch('https://news.google.com/_/DotsSplashUi/data/batchexecute?rpcids=Fbv4je', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8', 'User-Agent': UA },
+      body: new URLSearchParams({ 'f.req': freq }).toString(),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    })
+    const raw = await res.text()
+    const m = raw.match(/garturlres[\\",\s]*?(https?:\/\/[^"\\\s]+)/) || raw.match(/https?:\/\/(?!news\.google|www\.google)[^"\\\s]+/)
+    return m ? (m[1] || m[0]) : url
+  } catch {
+    return url
+  }
+}
+
 export async function fetchTrendsGrouped(n = 3): Promise<TrendGroup[]> {
   return Promise.all(TREND_KEYWORDS.map(k => fetchKeywordNews(k, n)))
 }

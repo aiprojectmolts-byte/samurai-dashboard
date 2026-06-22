@@ -1,6 +1,6 @@
 import { Redis } from '@upstash/redis'
 import { NextResponse } from 'next/server'
-import { fetchTrendItemsFlat, fetchKeywordNews } from '@/lib/sources'
+import { fetchTrendItemsFlat, fetchKeywordNews, resolveGoogleNewsUrl } from '@/lib/sources'
 import { WATCH } from '@/lib/watch'
 
 // ===== キャッチアップくん（子）=====
@@ -71,6 +71,9 @@ export async function GET(request: Request) {
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set' }, { status: 500 })
 
+    // Google News の中継URLを実記事URLに変換しておく（元記事リンクと兄さんの読み込みが効くように）。AI判定と並行で走らせる。
+    const resolveLinks = Promise.all(fresh.map(async (f) => { f.link = await resolveGoogleNewsUrl(f.link) }))
+
     const todayStr = new Date().toISOString().slice(0, 10)
     const listText = fresh.map((it, i) => `${i}. 「${it.title}」（媒体: ${it.source || '不明'} / KW: ${it.keyword}）`).join('\n')
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -88,6 +91,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'AI応答の解析に失敗', raw: raw.slice(0, 300) }, { status: 502 })
     }
 
+    await resolveLinks // 実URL変換の完了を待ってから保存
     const now = new Date()
     const added = judged.map((j: any, i: number) => {
       const src = fresh[typeof j.idx === 'number' ? j.idx : i] || fresh[i]

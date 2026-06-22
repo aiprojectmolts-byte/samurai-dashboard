@@ -1,5 +1,6 @@
 import { Redis } from '@upstash/redis'
 import { NextResponse } from 'next/server'
+import { resolveGoogleNewsUrl } from '@/lib/sources'
 
 // SAMURAI脳（四次元ポケット）API。
 // 分からん言葉・記事・質問を投げると、SAMURAIの文脈で・平易に・「自社への意味」付きで返す。
@@ -121,7 +122,9 @@ export async function POST(request: Request) {
     let sources: string[] = []
     const lastUser = [...messages].reverse().find((m: any) => m.role === 'user')
     if (lastUser) {
-      const urls = (lastUser.content.match(/https?:\/\/[^\s）)」』】、,]+/g) || []).slice(0, 2)
+      const rawUrls = (lastUser.content.match(/https?:\/\/[^\s）)」』】、,]+/g) || []).slice(0, 2)
+      // Google News の中継URLは実記事URLに変換してから取りに行く（でないと本文が読めない）
+      const urls = await Promise.all(rawUrls.map((u: string) => resolveGoogleNewsUrl(u)))
       if (urls.length) {
         sources = urls
         const pages = await Promise.all(urls.map(async (u: string) => {
