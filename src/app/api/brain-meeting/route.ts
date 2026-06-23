@@ -35,6 +35,7 @@ const DIGEST_TOOL = {
     type: 'object',
     properties: {
       title: { type: 'string', description: '会議の主題を短く' },
+      meetingDate: { type: 'string', description: '会議が行われた日付。文字起こし内で明言されていればYYYY-MM-DD形式で。不明なら空文字' },
       summary: { type: 'string', description: '全体像が30秒で掴める2〜3文' },
       decisions: { type: 'array', items: { type: 'string' }, description: '実際に合意・決定したことだけ' },
       myActions: { type: 'array', items: { type: 'string' }, description: '自社マーケ担当(読者本人)が動く/関わることだけ。他人の宿題は入れない' },
@@ -71,11 +72,28 @@ export async function DELETE(request: Request) {
   }
 }
 
+// 実施日などを後から修正する（id＋meetingDate）
+export async function PATCH(request: Request) {
+  try {
+    if (!redis) return NextResponse.json({ ok: false })
+    const { id, meetingDate } = await request.json()
+    if (!id) return NextResponse.json({ ok: false }, { status: 400 })
+    const existing = (await redis.get<any[]>(KEY)) || []
+    const meetings = existing.map((m: any) => m?.id === id ? { ...m, meetingDate: String(meetingDate || '').slice(0, 10) } : m)
+    await redis.set(KEY, meetings)
+    return NextResponse.json({ ok: true, meetings })
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 })
+  }
+}
+
+const validDate = (s: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? String(s) : ''
+
 export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY未設定（本番でのみAIが動きます）' }, { status: 500 })
   try {
-    const { transcript, name } = await request.json()
+    const { transcript, name, meetingDate: clientDate } = await request.json()
     const text = String(transcript || '').trim()
     if (text.length < 40) return NextResponse.json({ error: '文字起こしが短すぎます（VTTの中身を読み取れませんでした）' }, { status: 400 })
 
@@ -115,9 +133,12 @@ export async function POST(request: Request) {
     }
 
     const now = new Date()
+    // 実施日＝①ファイル名から検出(client) ②AIが文字起こしから抽出 ③なければアップ日
+    const meetingDate = validDate(clientDate) || validDate(dg.meetingDate) || now.toISOString().slice(0, 10)
     const meeting = {
       id: 'mtg_' + now.getTime(),
       name: String(name || '定例').slice(0, 80),
+      meetingDate,
       title: String(dg.title || 'マーケ定例').slice(0, 120),
       summary: String(dg.summary || ''),
       decisions: Array.isArray(dg.decisions) ? dg.decisions.map(String).slice(0, 20) : [],

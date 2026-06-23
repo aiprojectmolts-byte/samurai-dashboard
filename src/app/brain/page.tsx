@@ -54,6 +54,18 @@ function badgeColor(v: string): string {
   return ({ competitor: '#c0392b', threat: '#d35400', tailwind: '#1e7e34', research: '#6b5bd2', event: '#2a6fb0', none: '#9a9a9a' } as Record<string, string>)[v] || '#9a9a9a'
 }
 
+// ファイル名から会議実施日(YYYY-MM-DD)を拾う（Zoom/Teams等は名前に日付が入る）
+function parseDateFromName(name: string): string {
+  if (!name) return ''
+  let m = name.match(/(20\d{2})[-_./](\d{1,2})[-_./](\d{1,2})/)          // 2026-06-17 / 2026_6_17 等
+    || name.match(/(20\d{2})(\d{2})(\d{2})/)                              // 20260617（ZoomのGMT…も）
+    || name.match(/(20\d{2})年(\d{1,2})月(\d{1,2})日/)                    // 2026年6月17日
+  if (!m) return ''
+  const y = +m[1], mo = +m[2], d = +m[3]
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return ''
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
 // VTT(字幕/文字起こし)を、タイムスタンプ・連番・タグを落としてプレーンな会話テキストにする
 function parseVtt(raw: string): string {
   return raw.split(/\r?\n/)
@@ -175,7 +187,7 @@ export default function BrainPage() {
     try {
       const transcript = parseVtt(await file.text())
       if (transcript.length < 40) { setMtgErr('文字起こしを読み取れませんでした（.vttファイルか確認してね）'); setMtgBusy(false); return }
-      const r = await fetch('/api/brain-meeting', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript, name: file.name }) })
+      const r = await fetch('/api/brain-meeting', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript, name: file.name, meetingDate: parseDateFromName(file.name) }) })
       const d = await r.json()
       if (!r.ok || d.error) { setMtgErr(d.error || '処理に失敗しました'); setMtgBusy(false); return }
       await loadMeetings()
@@ -191,6 +203,10 @@ export default function BrainPage() {
   const delMeeting = async (m: any) => {
     if (!confirm(`「${m.title}」を削除しますか？`)) return
     try { await fetch(`/api/brain-meeting?id=${encodeURIComponent(m.id)}`, { method: 'DELETE' }); await loadMeetings() } catch { /* noop */ }
+  }
+  const setMtgDate = async (m: any, date: string) => {
+    if (!date) return
+    try { await fetch('/api/brain-meeting', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id, meetingDate: date }) }); await loadMeetings() } catch { /* noop */ }
   }
 
   // 開いている会話を記憶（ハードリロードで消えないように）
@@ -652,8 +668,12 @@ export default function BrainPage() {
                   ) : null
                   return (
                     <div key={m.id} style={{ background: '#fff', border: '0.5px solid rgba(0,0,0,0.1)', borderRadius: 10, padding: '13px 15px' }}>
-                      <div onClick={() => setOpenMtg(open ? '___' : m.id)} style={{ display: 'flex', alignItems: 'baseline', gap: 8, cursor: 'pointer', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 10.5, color: '#a9a9a9' }}>{(m.createdAt || '').slice(5, 10)}</span>
+                      <div onClick={() => setOpenMtg(open ? '___' : m.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', flexWrap: 'wrap' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} title="会議の実施日（クリックで修正）">
+                          <span style={{ fontSize: 11 }}>📅</span>
+                          <input type="date" value={m.meetingDate || ''} onClick={e => e.stopPropagation()} onChange={e => setMtgDate(m, e.target.value)}
+                            style={{ fontSize: 11, color: '#6b6b6b', border: 'none', background: 'none', fontFamily: 'inherit', padding: 0, cursor: 'pointer', width: 112 }} />
+                        </span>
                         <span style={{ fontSize: 14.5, fontWeight: 700, flex: 1 }}>{m.title}</span>
                         <span style={{ fontSize: 11, color: '#9a9a9a' }}>{open ? '▲' : '▼'}</span>
                       </div>

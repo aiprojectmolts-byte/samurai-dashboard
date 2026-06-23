@@ -196,7 +196,7 @@ export async function POST(request: Request) {
       if (Array.isArray(mtgs) && mtgs.length) {
         meetingBlock = `\n\n# 最近のマーケ定例（議事録ダイジェスト・直近${Math.min(2, mtgs.length)}件）\n` +
           mtgs.slice(0, 2).map((m: any) => {
-            const d = (m.createdAt || '').slice(0, 10)
+            const d = m.meetingDate || (m.createdAt || '').slice(0, 10)
             const dec = (m.decisions || []).slice(0, 6).map((x: string) => `・${x}`).join('\n')
             const act = (m.myActions || []).slice(0, 6).map((x: string) => `・${x}`).join('\n')
             return `## ${d} ${m.title}\n概要: ${m.summary}\n決まったこと:\n${dec}\nあなた(マーケ担当)のやること:\n${act}`
