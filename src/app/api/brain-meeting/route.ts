@@ -55,6 +55,22 @@ export async function GET() {
   }
 }
 
+// 1件削除(?id=)／全消し(?all=1)。誤アップロードを消せるように。
+export async function DELETE(request: Request) {
+  try {
+    if (!redis) return NextResponse.json({ ok: false })
+    const url = new URL(request.url)
+    if (url.searchParams.get('all') === '1') { await redis.set(KEY, []); return NextResponse.json({ ok: true, meetings: [] }) }
+    const id = url.searchParams.get('id')
+    const existing = (await redis.get<any[]>(KEY)) || []
+    const meetings = id ? existing.filter((m: any) => m?.id !== id) : existing
+    await redis.set(KEY, meetings)
+    return NextResponse.json({ ok: true, meetings })
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 })
+  }
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY未設定（本番でのみAIが動きます）' }, { status: 500 })

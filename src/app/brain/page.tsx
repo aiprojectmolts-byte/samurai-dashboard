@@ -188,6 +188,10 @@ export default function BrainPage() {
     setInput(`さっきのマーケ定例「${m.title}」について深掘りしたい。\n要点：${m.summary}\n決まったこと：${(m.decisions || []).join(' ｜ ')}`)
     setTab('ani'); setTimeout(() => taRef.current?.focus(), 60)
   }
+  const delMeeting = async (m: any) => {
+    if (!confirm(`「${m.title}」を削除しますか？`)) return
+    try { await fetch(`/api/brain-meeting?id=${encodeURIComponent(m.id)}`, { method: 'DELETE' }); await loadMeetings() } catch { /* noop */ }
+  }
 
   // 開いている会話を記憶（ハードリロードで消えないように）
   useEffect(() => { try { localStorage.setItem('brain_current', currentId) } catch { /* noop */ } }, [currentId])
@@ -676,8 +680,9 @@ export default function BrainPage() {
                           {list('❓', '確認したほうがいいこと', m.checks, '#8a6d3b')}
                           {m.soWhat && <div style={{ fontSize: 12.5, color: '#444', marginTop: 12, lineHeight: 1.6, borderLeft: '2px solid #e2e0da', paddingLeft: 10 }}>→ SAMURAIマーケへの意味：{m.soWhat}</div>}
                           {m.truncated && <div style={{ fontSize: 10.5, color: '#a9a9a9', marginTop: 8 }}>※ 文字起こしが長いため一部のみ要約しています。</div>}
-                          <div style={{ marginTop: 12 }}>
+                          <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
                             <button onClick={() => askMeeting(m)} style={{ fontSize: 11.5, color: '#fff', background: '#0f0f0f', border: 'none', borderRadius: 12, padding: '5px 12px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>🧠 兄さんに深掘り</button>
+                            <button onClick={() => delMeeting(m)} style={{ fontSize: 11, color: '#a9a9a9', background: 'none', border: '0.5px solid rgba(0,0,0,0.12)', borderRadius: 12, padding: '5px 10px', cursor: 'pointer', fontFamily: 'inherit' }}>🗑 削除</button>
                           </div>
                         </>
                       )}
