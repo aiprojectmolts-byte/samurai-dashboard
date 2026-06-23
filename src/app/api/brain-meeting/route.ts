@@ -25,9 +25,26 @@ const SYSTEM = `あなたはSAMURAI ARCHITECTS（建築×AIのスタートアッ
 - 「あなたがやること(myActions)」＝自社マーケ担当(＝この読者)が当事者として動く/関わるものだけを抜く。他人の宿題は入れない。
 - soWhat＝この定例がSAMURAIのマーケ/今の戦況にとって何を意味するか・次の一手を1〜2文で。
 
-出力は次のJSONだけ（説明・コードフェンス禁止）:
-{"title":"会議の主題を短く","summary":"全体像が30秒で掴める2〜3文","decisions":["決まったこと",...],"myActions":["あなた(マーケ担当)がやること/関わること",...],"terms":[{"term":"語","plain":"超平易な説明"},...],"checks":["確認したほうがいいこと・引っかかり・宿題",...],"soWhat":"SAMURAIマーケにとっての意味と次の一手"}
-配列は0件なら空配列。盛らずに、要点だけ正確に。`
+結果は digest ツールを呼んで登録してください。各配列は重要なものに絞る（terms最大20・decisions/myActions/checksは各最大15）。該当が無い配列は空でよい。盛らずに、要点だけ正確に。`
+
+// 構造化出力を強制するためのツール定義（生JSONを書かせず壊れないようにする）
+const DIGEST_TOOL = {
+  name: 'digest',
+  description: 'マーケ定例の文字起こしを噛み砕いたダイジェストとして登録する',
+  input_schema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: '会議の主題を短く' },
+      summary: { type: 'string', description: '全体像が30秒で掴める2〜3文' },
+      decisions: { type: 'array', items: { type: 'string' }, description: '実際に合意・決定したことだけ' },
+      myActions: { type: 'array', items: { type: 'string' }, description: '自社マーケ担当(読者本人)が動く/関わることだけ。他人の宿題は入れない' },
+      terms: { type: 'array', items: { type: 'object', properties: { term: { type: 'string' }, plain: { type: 'string' } }, required: ['term', 'plain'] }, description: '出てきた専門用語・社内語・略語・人名の超平易な解説' },
+      checks: { type: 'array', items: { type: 'string' }, description: '確認したほうがいいこと・引っかかり・宿題' },
+      soWhat: { type: 'string', description: 'SAMURAIマーケにとっての意味と次の一手' },
+    },
+    required: ['title', 'summary', 'decisions', 'myActions', 'terms', 'checks', 'soWhat'],
+  },
+}
 
 export async function GET() {
   try {
@@ -56,23 +73,29 @@ export async function POST(request: Request) {
     const truncated = text.length > 120000
     const body = `${truncated ? '（長いため冒頭〜途中までを抜粋）\n' : ''}${text.slice(0, 120000)}`
 
+    // ツール呼び出しで構造化出力を強制＝生JSONを書かせず壊れない（長い定例での途中切れ・JSON崩れを防ぐ）
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: MODEL, max_tokens: 2800, system: SYSTEM + briefBlock,
+        model: MODEL, max_tokens: 8000, system: SYSTEM + briefBlock,
+        tools: [DIGEST_TOOL], tool_choice: { type: 'tool', name: 'digest' },
         messages: [{ role: 'user', content: `次のマーケ定例の文字起こしをダイジェストにして：\n\n${body}` }],
       }),
     })
     const data = await res.json()
-    if (!res.ok) return NextResponse.json({ error: `Anthropic error ${res.status}` }, { status: 502 })
-    const raw = data.content?.find((c: any) => c.type === 'text')?.text || data.content?.[0]?.text || ''
-    let dg: any
-    try {
-      const t = raw.replace(/```json|```/g, '').trim()
-      dg = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1))
-    } catch {
-      return NextResponse.json({ error: 'AI応答の解析に失敗しました', raw: raw.slice(0, 300) }, { status: 502 })
+    if (!res.ok) return NextResponse.json({ error: `AIエラー(${res.status})。少し待って再度お試しください`, detail: data?.error?.message }, { status: 502 })
+    // 第一候補＝ツール出力(クリーンなオブジェクト)。無ければテキストからJSONを救出（trailing comma/制御文字を掃除）
+    let dg: any = data.content?.find((c: any) => c.type === 'tool_use')?.input
+    if (!dg || typeof dg !== 'object') {
+      const raw = data.content?.find((c: any) => c.type === 'text')?.text || ''
+      try {
+        let t = raw.replace(/```json|```/g, '').trim()
+        t = t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1).replace(/,\s*([}\]])/g, '$1').replace(/[\u0000-\u001F]+/g, ' ')
+        dg = JSON.parse(t)
+      } catch {
+        return NextResponse.json({ error: 'ダイジェストの生成に失敗しました。もう一度お試しください', stop: data?.stop_reason }, { status: 502 })
+      }
     }
 
     const now = new Date()
